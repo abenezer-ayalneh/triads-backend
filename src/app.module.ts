@@ -5,7 +5,9 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 
 import AppController from './app.controller'
 import AppService from './app.service'
+import PrismaModule from './prisma/prisma.module'
 import GlobalExceptionFilter from './shared/filters/global-exception.filter'
+import { TriadsModule } from './triads/triads.module'
 
 @Module({
 	imports: [
@@ -20,6 +22,8 @@ import GlobalExceptionFilter from './shared/filters/global-exception.filter'
 				},
 			],
 		}),
+		PrismaModule,
+		TriadsModule,
 	],
 	controllers: [AppController],
 	providers: [

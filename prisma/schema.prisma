@@ -1,0 +1,43 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Triad {
+  id          Int      @id @default(autoincrement())
+  keyword     String
+  cues        String[]
+  fullPhrases String[]
+
+  TriadGroup1 TriadGroup[] @relation(name: "firstTriad")
+  TriadGroup2 TriadGroup[] @relation(name: "secondTriad")
+  TriadGroup3 TriadGroup[] @relation(name: "thirdTriad")
+  TriadGroup4 TriadGroup[] @relation(name: "fourthTriad")
+
+  @@map("triads")
+}
+
+model TriadGroup {
+  id       Int @id @default(autoincrement())
+  triad1Id Int
+  triad2Id Int
+  triad3Id Int
+  triad4Id Int
+
+  Triad1 Triad @relation(fields: [triad1Id], references: [id], name: "firstTriad")
+  Triad2 Triad @relation(fields: [triad2Id], references: [id], name: "secondTriad")
+  Triad3 Triad @relation(fields: [triad3Id], references: [id], name: "thirdTriad")
+  Triad4 Triad @relation(fields: [triad4Id], references: [id], name: "fourthTriad")
+
+  @@map("triadGroups")
+}

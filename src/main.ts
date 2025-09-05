@@ -51,7 +51,7 @@ async function bootstrap() {
 	app.enableShutdownHooks()
 
 	// Swagger for API documentation
-	const swaggerConfig = new DocumentBuilder().setTitle('Nest Template').setDescription('API Documentation').setVersion('1.0').build()
+	const swaggerConfig = new DocumentBuilder().setTitle('Triads Backend').setDescription('API Documentation').setVersion('1.0').build()
 	const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig)
 	SwaggerModule.setup('docs', app, documentFactory)
 

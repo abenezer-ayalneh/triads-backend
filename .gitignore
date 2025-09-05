@@ -166,3 +166,5 @@ dist
 # User
 data/
 logs/
+
+/generated/prisma
