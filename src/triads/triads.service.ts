@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { intersection, isEmpty, xor } from 'lodash-es'
+import _ from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { GetHintDto } from './dto/get-hint.dto'
@@ -43,8 +43,8 @@ export class TriadsService {
 		const triadsContainingSampleCue = await this.prismaService.triad.findMany({ where: { cues: { has: sampleCue.toUpperCase() } } })
 
 		return triadsContainingSampleCue.find((triad) =>
-			isEmpty(
-				xor(
+			_.isEmpty(
+				_.xor(
 					triad.cues.map((cue) => cue.toUpperCase()),
 					cues.map((cue) => cue.toUpperCase()),
 				),
@@ -64,7 +64,7 @@ export class TriadsService {
 		const triadsContainingSampleCue = await this.prismaService.triad.findMany({ where: { cues: { has: sampleCue.toUpperCase() } } })
 
 		// Find a triad which contains the sample cue word and two other cues from the list of cues received
-		const matchedTriad = triadsContainingSampleCue.find((triad) => intersection(triad.cues, getHintDto.cues))
+		const matchedTriad = triadsContainingSampleCue.find((triad) => _.intersection(triad.cues, getHintDto.cues))
 
 		return {
 			hint: matchedTriad ? matchedTriad.cues : null,
