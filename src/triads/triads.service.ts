@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import _ from 'lodash'
+import * as _ from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
