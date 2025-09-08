@@ -10,32 +10,18 @@ export class TriadsService {
 	constructor(private readonly prismaService: PrismaService) {}
 
 	async getCues() {
-		// TODO: randomly select a triad group
-		const triadGroup = await this.prismaService.triadGroup.findFirst({
-			select: {
-				id: true,
-				Triad1: {
-					select: {
-						id: true,
-						cues: true,
-					},
-				},
-				Triad2: {
-					select: {
-						id: true,
-						cues: true,
-					},
-				},
-				Triad3: {
-					select: {
-						id: true,
-						cues: true,
-					},
-				},
-			},
-		})
+		const randomTriadCues = await this.prismaService.$queryRawUnsafe<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(`
+			SELECT id,
+				   (SELECT cues FROM triads WHERE id = "triadGroups"."triad1Id") as triad1,
+				   (SELECT cues FROM triads WHERE id = "triadGroups"."triad2Id") as triad2,
+				   (SELECT cues FROM triads WHERE id = "triadGroups"."triad3Id") as triad3
+			FROM "triadGroups"
+			ORDER BY random()
+			LIMIT 1;
+		`)
 
-		return [...triadGroup.Triad1.cues, ...triadGroup.Triad2.cues, ...triadGroup.Triad3.cues].sort(() => Math.random() - 0.5)
+		const randomTriadCue = randomTriadCues[0]
+		return [...randomTriadCue.triad1, ...randomTriadCue.triad2, ...randomTriadCue.triad3].sort(() => Math.random() - 0.5)
 	}
 
 	async getMatchedTriad(cues: string[]): Promise<{ id: number; keyword: string; cues: string[]; fullPhrases: string[] } | undefined> {
