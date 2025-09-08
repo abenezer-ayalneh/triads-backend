@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import _ from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
 import { GetHintDto } from './dto/get-hint.dto'
 
 @Injectable()
@@ -37,7 +38,7 @@ export class TriadsService {
 		return [...triadGroup.Triad1.cues, ...triadGroup.Triad2.cues, ...triadGroup.Triad3.cues].sort(() => Math.random() - 0.5)
 	}
 
-	async getMatchedTriads(cues: string[]): Promise<{ id: number; keyword: string; cues: string[]; fullPhrases: string[] } | undefined> {
+	async getMatchedTriad(cues: string[]): Promise<{ id: number; keyword: string; cues: string[]; fullPhrases: string[] } | undefined> {
 		const sampleCue = cues[0]
 
 		const triadsContainingSampleCue = await this.prismaService.triad.findMany({ where: { cues: { has: sampleCue.toUpperCase() } } })
@@ -76,5 +77,32 @@ export class TriadsService {
 						: matchedTriad.keyword.charAt(0)
 					: undefined,
 		}
+	}
+
+	async getFourthTriadCues(getFourthTriadDto: GetFourthTriadDto) {
+		const triadGroup = await this.prismaService.triadGroup.findFirst({
+			where: {
+				AND: {
+					triad1Id: {
+						in: getFourthTriadDto.triadsIds,
+					},
+					triad2Id: {
+						in: getFourthTriadDto.triadsIds,
+					},
+					triad3Id: {
+						in: getFourthTriadDto.triadsIds,
+					},
+				},
+			},
+			select: {
+				Triad4: {
+					select: {
+						cues: true,
+					},
+				},
+			},
+		})
+
+		return triadGroup?.Triad4?.cues
 	}
 }
