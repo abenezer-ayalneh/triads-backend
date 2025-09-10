@@ -27,20 +27,6 @@ export class TriadsController {
 		return Boolean(matchedTriad)
 	}
 
-	@Get('keyword-length-hint')
-	async getKeywordLengthHint(@Query() checkSolutionDto: CheckSolutionDto) {
-		const matchedTriad = await this.triadsService.getMatchedTriad(checkSolutionDto.cues)
-
-		return matchedTriad ? matchedTriad.keyword.length : null
-	}
-
-	@Get('first-letter-hint')
-	async getFirstLetterHint(@Query() checkSolutionDto: CheckSolutionDto) {
-		const matchedTriad = await this.triadsService.getMatchedTriad(checkSolutionDto.cues)
-
-		return matchedTriad ? matchedTriad.keyword.charAt(0)?.toUpperCase() : null
-	}
-
 	@Get('check-answer')
 	async checkAnswer(@Query() checkAnswerDto: CheckAnswerDto) {
 		const matchedTriad = await this.triadsService.getMatchedTriad(checkAnswerDto.cues)

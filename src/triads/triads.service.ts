@@ -51,7 +51,7 @@ export class TriadsService {
 		const triadsContainingSampleCue = await this.prismaService.triad.findMany({ where: { cues: { has: sampleCue.toUpperCase() } } })
 
 		// Find a triad which contains the sample cue word and two other cues from the list of cues received
-		const matchedTriad = triadsContainingSampleCue.find((triad) => _.intersection(triad.cues, getHintDto.cues))
+		const matchedTriad = triadsContainingSampleCue.find((triad) => triad.cues.every((cue) => getHintDto.cues.includes(cue)))
 
 		return {
 			hint: matchedTriad ? matchedTriad.cues : null,

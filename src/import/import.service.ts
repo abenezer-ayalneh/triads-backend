@@ -20,11 +20,11 @@ export class ImportService {
 			let currentTriadIds: number[] = []
 
 			// Process each row
-			for (let i = 1; i < data.length; i++) {
+			for (let i = 0; i < data.length; i++) {
 				const row = data[i]
 
 				// Skip empty rows
-				if (!row.A) continue
+				if (!row.A || row.A.toString().trim() === '') continue
 
 				// Convert to uppercase
 				const keyword = row.A.toString().toUpperCase()
@@ -34,12 +34,9 @@ export class ImportService {
 
 				// Create fullPhrases array
 				const fullPhrases = [phrase1, phrase2, phrase3].filter(Boolean)
-
 				// Create cues array (phrases with keyword removed)
 				const cues = fullPhrases.map((phrase) => {
-					// Create a regex to match the keyword with word boundaries
-					const keywordRegex = new RegExp(`\\b${keyword}\\b`, 'gi')
-					return phrase.replace(keywordRegex, '').trim()
+					return phrase.replace(keyword, '').trim()
 				})
 
 				// Create triad in database
