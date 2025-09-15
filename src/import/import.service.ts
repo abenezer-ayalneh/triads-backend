@@ -27,10 +27,10 @@ export class ImportService {
 				if (!row.A || row.A.toString().trim() === '') continue
 
 				// Convert to uppercase
-				const keyword = row.A.toString().toUpperCase()
-				const phrase1 = row.B ? row.B.toString().toUpperCase() : ''
-				const phrase2 = row.C ? row.C.toString().toUpperCase() : ''
-				const phrase3 = row.D ? row.D.toString().toUpperCase() : ''
+				const keyword = row.A.toString().trim().toUpperCase()
+				const phrase1 = row.B ? row.B.toString().trim().toUpperCase() : ''
+				const phrase2 = row.C ? row.C.toString().trim().toUpperCase() : ''
+				const phrase3 = row.D ? row.D.toString().trim().toUpperCase() : ''
 
 				// Create fullPhrases array
 				const fullPhrases = [phrase1, phrase2, phrase3].filter(Boolean)
