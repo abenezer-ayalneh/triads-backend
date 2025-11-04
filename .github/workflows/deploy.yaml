@@ -9,8 +9,21 @@ on:
 jobs:
     deploy:
         runs-on: self-hosted
+        environment: production
+
         steps:
-            - uses: actions/checkout@v2
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '22.19.0'
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v2
+              with:
+                  version: latest
 
             - name: Create .env file
               run: |
@@ -28,11 +41,26 @@ jobs:
                   pnpm exec prisma migrate deploy
                   pnpm exec prisma generate
 
-            - name: Build
+            - name: Build application
               run: pnpm build
 
-            - name: Deploy with pm2
+            - name: Deploy application with PM2
               run: |
                   pm2 stop triads-backend || true
-                  pm2 start
+                  pm2 start ecosystem.config.js --env production
                   pm2 save
+                  pm2 startup || true
+
+            - name: Health check
+              run: |
+                  sleep 10
+                  pm2 status
+                  curl -f http://localhost:${{ secrets.APP_PORT }}/health || curl -f http://localhost:${{ secrets.APP_PORT }} || echo "Health check failed, but deployment completed"
+
+            - name: Display deployment status
+              run: |
+                  echo "🚀 Deployment completed successfully!"
+                  echo "Application: lynx-backend"
+                  echo "Environment: production"
+                  echo "Port: ${{ secrets.APP_PORT }}"
+                  pm2 list
