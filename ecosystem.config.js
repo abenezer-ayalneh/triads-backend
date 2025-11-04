@@ -2,7 +2,7 @@ module.exports = {
 	apps: [
 		{
 			name: 'triads-backend',
-			script: 'main.js',
+			script: 'dist/src/main.js',
 			watch: true,
 			ignore_watch: ['node_modules', 'logs', 'data', 'dist'],
 			instances: 1,
