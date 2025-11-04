@@ -1,4 +1,4 @@
-name: Deploy to VPS on GoDaddy
+name: Deploy to VPS
 
 on:
     workflow_dispatch:
