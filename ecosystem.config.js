@@ -1,8 +1,8 @@
 module.exports = {
 	apps: [
 		{
-			name: 'lynx-backend',
-			script: '/home/richard/triads/triads-new/triads-backend/dist/src/main.js',
+			name: 'triads-backend',
+			script: 'main.js',
 			watch: true,
 			ignore_watch: ['node_modules', 'logs', 'data', 'dist'],
 			instances: 1,

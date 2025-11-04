@@ -25,6 +25,7 @@ jobs:
 
             - name: Deploy with pm2
               run: |
-                  pm2 stop lynx-backend || true
-                  pm2 start lynx-backend
+                  cd /home/richard/triads/triads-new/triads-backend/dist/src
+                  pm2 stop triads-backend || true
+                  pm2 start triads-backend
                   pm2 save
