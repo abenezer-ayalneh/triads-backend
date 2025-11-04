@@ -33,7 +33,6 @@ jobs:
 
             - name: Deploy with pm2
               run: |
-                  cd /home/richard/triads/triads-new/triads-backend/dist/src
                   pm2 stop triads-backend || true
                   pm2 start
                   pm2 save
