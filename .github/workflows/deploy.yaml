@@ -1,0 +1,30 @@
+name: Deploy to VPS on GoDaddy
+
+on:
+    workflow_dispatch:
+    push:
+        branches:
+            - main
+
+jobs:
+    deploy:
+        runs-on: self-hosted
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Create .env file
+              run: |
+                  echo "APP_PORT=5000" >> .env
+                  echo "CORS_ALLOWED_ORIGINS="https://triads.gametrix.org" >> .env
+                  echo "THROTTLER_TTL=60000" >> .env
+                  echo "THROTTLER_LIMIT=10" >> .env
+                  ehco "DATABASE_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{secrets.POSTGRES_PASSWORD}}@loclahost:5432/triads?schema=public" >> .env
+
+            - name: Deploy with pm2
+              run: |
+                  pm2 stop all || true
+                  pm2 start
+                  pm2 save
