@@ -18,7 +18,7 @@ jobs:
                   echo "CORS_ALLOWED_ORIGINS=https://triads.gametrix.org" >> .env
                   echo "THROTTLER_TTL=60000" >> .env
                   echo "THROTTLER_LIMIT=10" >> .env
-                  echo "DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/triads?schema=public" >> .env
+                  echo "DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5434/triads?schema=public" >> .env
 
             - name: Install dependencies
               run: pnpm install
