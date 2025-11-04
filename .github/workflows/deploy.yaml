@@ -25,6 +25,6 @@ jobs:
 
             - name: Deploy with pm2
               run: |
-                  pm2 stop all || true
-                  pm2 start
+                  pm2 stop lynx-backend || true
+                  pm2 start lynx-backend
                   pm2 save
