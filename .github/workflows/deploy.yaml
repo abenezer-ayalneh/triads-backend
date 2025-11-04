@@ -23,9 +23,12 @@ jobs:
                   echo "THROTTLER_LIMIT=10" >> .env
                   ehco "DATABASE_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{secrets.POSTGRES_PASSWORD}}@loclahost:5432/triads?schema=public" >> .env
 
+            - name: Build
+              run: pnpm build
+
             - name: Deploy with pm2
               run: |
                   cd /home/richard/triads/triads-new/triads-backend/dist/src
                   pm2 stop triads-backend || true
-                  pm2 start triads-backend
+                  pm2 start
                   pm2 save
