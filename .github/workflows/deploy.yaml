@@ -15,6 +15,14 @@ jobs:
             - name: Install dependencies
               run: pnpm install
 
+            - name: Configure database
+              run: |
+                  pnpm exec prisma migrate deploy
+                  pnpm exec prisma generate
+
+            - name: Build
+              run: pnpm build
+
             - name: Create .env file
               run: |
                   echo "APP_PORT=5000" >> .env
@@ -22,9 +30,6 @@ jobs:
                   echo "THROTTLER_TTL=60000" >> .env
                   echo "THROTTLER_LIMIT=10" >> .env
                   ehco "DATABASE_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{secrets.POSTGRES_PASSWORD}}@loclahost:5432/triads?schema=public" >> .env
-
-            - name: Build
-              run: pnpm build
 
             - name: Deploy with pm2
               run: |
