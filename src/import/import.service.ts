@@ -10,17 +10,41 @@ export class ImportService {
 	constructor(private readonly prismaService: PrismaService) {}
 
 	async importTriadsFromExcel(file: Express.Multer.File) {
+		// Validate file size to prevent memory issues (limit to 10MB)
+		const maxFileSize = 10 * 1024 * 1024 // 10MB
+		if (file.buffer.length > maxFileSize) {
+			throw new Error('File size exceeds maximum allowed size of 10MB')
+		}
+
+		let workbook: XLSX.WorkBook | null = null
 		try {
-			// Read the Excel file
-			const workbook = XLSX.read(file.buffer, { type: 'buffer' })
+			// Read the Excel file with memory-efficient options
+			workbook = XLSX.read(file.buffer, {
+				type: 'buffer',
+				cellDates: false, // Don't parse dates to reduce memory
+				cellNF: false, // Don't parse number formats
+				cellStyles: false, // Don't parse styles
+			})
+
 			const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+			if (!worksheet) {
+				throw new Error('Excel file does not contain any worksheets')
+			}
+
 			const data = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { header: 'A' })
+
+			// Limit processing to prevent memory issues
+			const maxRows = 10000
+			if (data.length > maxRows) {
+				this.logger.warn(`File contains ${data.length} rows, processing only first ${maxRows} rows`)
+			}
 
 			const triadGroups = []
 			let currentTriadIds: number[] = []
+			const rowsToProcess = Math.min(data.length, maxRows)
 
 			// Process each row
-			for (let i = 0; i < data.length; i++) {
+			for (let i = 0; i < rowsToProcess; i++) {
 				const row = data[i]
 
 				// Skip empty rows
@@ -67,6 +91,9 @@ export class ImportService {
 				}
 			}
 
+			// Explicitly clear workbook from memory
+			workbook = null
+
 			return {
 				success: true,
 				message: `Imported ${triadGroups.length} triad groups successfully`,
@@ -74,6 +101,8 @@ export class ImportService {
 			}
 		} catch (error) {
 			this.logger.error(`Error importing triads: ${error}`)
+			// Ensure workbook is cleared even on error
+			workbook = null
 			throw error
 		}
 	}

@@ -3,11 +3,11 @@ module.exports = {
 		{
 			name: 'triads-backend',
 			script: 'dist/src/main.js',
-			watch: true,
+			watch: false, // Disable watch in production to reduce memory usage
 			ignore_watch: ['node_modules', 'logs', 'data', 'dist'],
 			instances: 1,
 			autorestart: true,
-			max_memory_restart: '1G',
+			max_memory_restart: '1G', // Restart if memory exceeds 1GB
 			env: {
 				NODE_ENV: 'development',
 			},

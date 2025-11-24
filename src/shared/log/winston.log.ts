@@ -5,7 +5,7 @@ import { createLogger, format, LoggerOptions, transports } from 'winston'
 
 // For development environment
 const loggerOptions: LoggerOptions = {
-	level: 'silly',
+	level: process.env.NODE_ENV === 'production' ? 'info' : 'silly',
 	format: format.combine(format.errors({ stack: true })),
 	transports: [
 		// - Write all logs to console when in development environment
