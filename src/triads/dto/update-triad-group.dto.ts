@@ -1,0 +1,28 @@
+import { Type } from 'class-transformer'
+import { IsInt, Validate, ValidateNested } from 'class-validator'
+
+import { IsFourthTriadCuesValidConstraint } from '../../shared/validators/fourth-triad-cues.validator'
+import { TriadInputDto } from './triad-input.dto'
+
+export class UpdateTriadGroupDto {
+	@Type(() => Number)
+	@IsInt()
+	id: number
+
+	@ValidateNested()
+	@Type(() => TriadInputDto)
+	@Validate(IsFourthTriadCuesValidConstraint)
+	triad1: TriadInputDto
+
+	@ValidateNested()
+	@Type(() => TriadInputDto)
+	triad2: TriadInputDto
+
+	@ValidateNested()
+	@Type(() => TriadInputDto)
+	triad3: TriadInputDto
+
+	@ValidateNested()
+	@Type(() => TriadInputDto)
+	triad4: TriadInputDto
+}

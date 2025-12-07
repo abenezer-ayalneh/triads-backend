@@ -28,11 +28,12 @@ model Triad {
 }
 
 model TriadGroup {
-  id       Int @id @default(autoincrement())
+  id       Int     @id @default(autoincrement())
   triad1Id Int
   triad2Id Int
   triad3Id Int
   triad4Id Int
+  active   Boolean @default(true)
 
   Triad1 Triad @relation(fields: [triad1Id], references: [id], name: "firstTriad")
   Triad2 Triad @relation(fields: [triad2Id], references: [id], name: "secondTriad")

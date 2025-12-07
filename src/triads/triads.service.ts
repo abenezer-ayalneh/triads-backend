@@ -1,13 +1,49 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { isEmpty, xor } from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { CreateTriadGroupDto } from './dto/create-triad-group.dto'
 import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
 import { GetHintDto } from './dto/get-hint.dto'
+import { TriadInputDto } from './dto/triad-input.dto'
+import { UpdateTriadGroupDto } from './dto/update-triad-group.dto'
 
 @Injectable()
 export class TriadsService {
 	constructor(private readonly prismaService: PrismaService) {}
+
+	// Validation helper: Check if keyword is substring of each cue
+	private validateKeywordSubstring(triad: TriadInputDto): void {
+		if (!triad.cues || triad.cues.length === 0) {
+			throw new BadRequestException('Triad must have cues')
+		}
+		if (!triad.keyword) {
+			throw new BadRequestException('Triad must have a keyword')
+		}
+
+		const invalidCues = triad.cues.filter((cue) => !cue.includes(triad.keyword))
+		if (invalidCues.length > 0) {
+			throw new BadRequestException(`Keyword "${triad.keyword}" must be a substring of each cue. Invalid cues: ${invalidCues.join(', ')}`)
+		}
+	}
+
+	// Validation helper: Check if keywords of first 3 triads match cues of 4th triad
+	private validateFourthTriadCues(triad1: TriadInputDto, triad2: TriadInputDto, triad3: TriadInputDto, triad4: TriadInputDto): void {
+		const expectedCues = [triad1.keyword, triad2.keyword, triad3.keyword].sort()
+		const actualCues = [...triad4.cues].sort()
+
+		if (expectedCues.length !== actualCues.length) {
+			throw new BadRequestException('Keywords of triad1, triad2, and triad3 must match the cues of triad4')
+		}
+
+		const mismatch = expectedCues.some((keyword, index) => keyword !== actualCues[index])
+		if (mismatch) {
+			throw new BadRequestException(
+				`Keywords of triad1 (${triad1.keyword}), triad2 (${triad2.keyword}), and triad3 (${triad3.keyword}) must match the cues of triad4 (${triad4.cues.join(', ')})`,
+			)
+		}
+	}
 
 	async getCues() {
 		// Optimized query using JOINs instead of nested subqueries for better performance
@@ -21,6 +57,7 @@ export class TriadsService {
 			INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
 			INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
 			INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
+			WHERE tg.active = true
 			ORDER BY random()
 			LIMIT 1;
 		`)
@@ -89,6 +126,7 @@ export class TriadsService {
 		const triadGroup = await this.prismaService.triadGroup.findFirst({
 			where: {
 				AND: {
+					active: true,
 					triad1Id: {
 						in: getFourthTriadDto.triadsIds,
 					},
@@ -110,5 +148,379 @@ export class TriadsService {
 		})
 
 		return triadGroup?.Triad4?.cues
+	}
+
+	async getTriadGroups(offset: number, limit: number, search?: string) {
+		// Build where clause for search if provided
+		// Search matches any of the 4 triads' keywords (case-insensitive partial match)
+		// Note: This endpoint returns all groups including deactivated ones for frontend management
+		const whereClause: Prisma.TriadGroupWhereInput = {}
+
+		if (search) {
+			whereClause.OR = [
+				{ Triad1: { keyword: { contains: search, mode: 'insensitive' } } },
+				{ Triad2: { keyword: { contains: search, mode: 'insensitive' } } },
+				{ Triad3: { keyword: { contains: search, mode: 'insensitive' } } },
+				{ Triad4: { keyword: { contains: search, mode: 'insensitive' } } },
+			]
+		}
+
+		// Optimized query using select to only fetch needed fields
+		// Single query with includes to avoid N+1 queries
+		const triadGroups = await this.prismaService.triadGroup.findMany({
+			where: whereClause,
+			skip: offset,
+			take: limit,
+			select: {
+				id: true,
+				active: true,
+				Triad1: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad2: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad3: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		// Transform the response to match the expected format (triad1, triad2, triad3, triad4)
+		return triadGroups.map((group) => ({
+			id: group.id,
+			active: group.active,
+			triad1: group.Triad1,
+			triad2: group.Triad2,
+			triad3: group.Triad3,
+			triad4: group.Triad4,
+		}))
+	}
+
+	async deleteTriadGroup(id: number) {
+		// Find the triad group
+		const triadGroup = await this.prismaService.triadGroup.findUnique({
+			where: { id },
+			select: {
+				triad1Id: true,
+				triad2Id: true,
+				triad3Id: true,
+				triad4Id: true,
+			},
+		})
+
+		if (!triadGroup) {
+			throw new NotFoundException(`Triad group with ID ${id} not found`)
+		}
+
+		const triadIds = [triadGroup.triad1Id, triadGroup.triad2Id, triadGroup.triad3Id, triadGroup.triad4Id]
+
+		// Check if each triad is used by other groups
+		const triadsToDelete: number[] = []
+		for (const triadId of triadIds) {
+			const usageCount = await this.prismaService.triadGroup.count({
+				where: {
+					OR: [{ triad1Id: triadId }, { triad2Id: triadId }, { triad3Id: triadId }, { triad4Id: triadId }],
+				},
+			})
+
+			// Only delete if this is the only group using the triad
+			if (usageCount === 1) {
+				triadsToDelete.push(triadId)
+			}
+		}
+
+		// Delete triads that are exclusively used by this group
+		if (triadsToDelete.length > 0) {
+			await this.prismaService.triad.deleteMany({
+				where: {
+					id: {
+						in: triadsToDelete,
+					},
+				},
+			})
+		}
+
+		// Delete the triad group
+		await this.prismaService.triadGroup.delete({
+			where: { id },
+		})
+
+		return { success: true, message: `Triad group ${id} deleted successfully` }
+	}
+
+	async updateTriadGroupActive(id: number, active: boolean) {
+		const triadGroup = await this.prismaService.triadGroup.findUnique({
+			where: { id },
+		})
+
+		if (!triadGroup) {
+			throw new NotFoundException(`Triad group with ID ${id} not found`)
+		}
+
+		const updated = await this.prismaService.triadGroup.update({
+			where: { id },
+			data: { active },
+			select: {
+				id: true,
+				active: true,
+			},
+		})
+
+		return updated
+	}
+
+	async createTriadGroup(createDto: CreateTriadGroupDto) {
+		// Validate each triad
+		this.validateKeywordSubstring(createDto.triad1)
+		this.validateKeywordSubstring(createDto.triad2)
+		this.validateKeywordSubstring(createDto.triad3)
+		this.validateKeywordSubstring(createDto.triad4)
+
+		// Validate fourth triad cues
+		this.validateFourthTriadCues(createDto.triad1, createDto.triad2, createDto.triad3, createDto.triad4)
+
+		// Helper function to calculate fullPhrases from keyword and cues
+		const calculateFullPhrases = (keyword: string, cues: string[]): string[] => {
+			return cues.map((cue) => {
+				// If cue already contains keyword, use as is, otherwise prepend keyword
+				return cue.includes(keyword) ? cue : `${cue} ${keyword}`.trim()
+			})
+		}
+
+		// Create all 4 triads
+		const triad1 = await this.prismaService.triad.create({
+			data: {
+				keyword: createDto.triad1.keyword,
+				cues: createDto.triad1.cues,
+				fullPhrases: calculateFullPhrases(createDto.triad1.keyword, createDto.triad1.cues),
+			},
+		})
+
+		const triad2 = await this.prismaService.triad.create({
+			data: {
+				keyword: createDto.triad2.keyword,
+				cues: createDto.triad2.cues,
+				fullPhrases: calculateFullPhrases(createDto.triad2.keyword, createDto.triad2.cues),
+			},
+		})
+
+		const triad3 = await this.prismaService.triad.create({
+			data: {
+				keyword: createDto.triad3.keyword,
+				cues: createDto.triad3.cues,
+				fullPhrases: calculateFullPhrases(createDto.triad3.keyword, createDto.triad3.cues),
+			},
+		})
+
+		const triad4 = await this.prismaService.triad.create({
+			data: {
+				keyword: createDto.triad4.keyword,
+				cues: createDto.triad4.cues,
+				fullPhrases: calculateFullPhrases(createDto.triad4.keyword, createDto.triad4.cues),
+			},
+		})
+
+		// Create the triad group
+		const triadGroup = await this.prismaService.triadGroup.create({
+			data: {
+				triad1Id: triad1.id,
+				triad2Id: triad2.id,
+				triad3Id: triad3.id,
+				triad4Id: triad4.id,
+				active: true,
+			},
+			select: {
+				id: true,
+				active: true,
+				Triad1: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad2: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad3: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		// Transform the response
+		return {
+			id: triadGroup.id,
+			active: triadGroup.active,
+			triad1: triadGroup.Triad1,
+			triad2: triadGroup.Triad2,
+			triad3: triadGroup.Triad3,
+			triad4: triadGroup.Triad4,
+		}
+	}
+
+	async updateTriadGroup(updateDto: UpdateTriadGroupDto) {
+		// Validate each triad
+		this.validateKeywordSubstring(updateDto.triad1)
+		this.validateKeywordSubstring(updateDto.triad2)
+		this.validateKeywordSubstring(updateDto.triad3)
+		this.validateKeywordSubstring(updateDto.triad4)
+
+		// Validate fourth triad cues
+		this.validateFourthTriadCues(updateDto.triad1, updateDto.triad2, updateDto.triad3, updateDto.triad4)
+
+		// Find the triad group
+		const triadGroup = await this.prismaService.triadGroup.findUnique({
+			where: { id: updateDto.id },
+			select: {
+				triad1Id: true,
+				triad2Id: true,
+				triad3Id: true,
+				triad4Id: true,
+			},
+		})
+
+		if (!triadGroup) {
+			throw new NotFoundException(`Triad group with ID ${updateDto.id} not found`)
+		}
+
+		// Helper function to calculate fullPhrases from keyword and cues
+		const calculateFullPhrases = (keyword: string, cues: string[]): string[] => {
+			return cues.map((cue) => {
+				// If cue already contains keyword, use as is, otherwise prepend keyword
+				return cue.includes(keyword) ? cue : `${cue} ${keyword}`.trim()
+			})
+		}
+
+		// Update all 4 triads
+		await this.prismaService.triad.update({
+			where: { id: triadGroup.triad1Id },
+			data: {
+				keyword: updateDto.triad1.keyword,
+				cues: updateDto.triad1.cues,
+				fullPhrases: calculateFullPhrases(updateDto.triad1.keyword, updateDto.triad1.cues),
+			},
+		})
+
+		await this.prismaService.triad.update({
+			where: { id: triadGroup.triad2Id },
+			data: {
+				keyword: updateDto.triad2.keyword,
+				cues: updateDto.triad2.cues,
+				fullPhrases: calculateFullPhrases(updateDto.triad2.keyword, updateDto.triad2.cues),
+			},
+		})
+
+		await this.prismaService.triad.update({
+			where: { id: triadGroup.triad3Id },
+			data: {
+				keyword: updateDto.triad3.keyword,
+				cues: updateDto.triad3.cues,
+				fullPhrases: calculateFullPhrases(updateDto.triad3.keyword, updateDto.triad3.cues),
+			},
+		})
+
+		await this.prismaService.triad.update({
+			where: { id: triadGroup.triad4Id },
+			data: {
+				keyword: updateDto.triad4.keyword,
+				cues: updateDto.triad4.cues,
+				fullPhrases: calculateFullPhrases(updateDto.triad4.keyword, updateDto.triad4.cues),
+			},
+		})
+
+		// Fetch and return the updated triad group
+		const updated = await this.prismaService.triadGroup.findUnique({
+			where: { id: updateDto.id },
+			select: {
+				id: true,
+				active: true,
+				Triad1: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad2: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad3: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		// Transform the response
+		return {
+			id: updated.id,
+			active: updated.active,
+			triad1: updated.Triad1,
+			triad2: updated.Triad2,
+			triad3: updated.Triad3,
+			triad4: updated.Triad4,
+		}
 	}
 }
