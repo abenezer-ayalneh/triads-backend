@@ -2,7 +2,7 @@ import { ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface 
 
 interface TriadInputDto {
 	keyword: string
-	cues: string[]
+	fullPhrases: string[]
 }
 
 interface TriadGroupInputObject {
@@ -31,21 +31,50 @@ export class IsFourthTriadCuesValidConstraint implements ValidatorConstraintInte
 		const keyword2 = triad2.keyword
 		const keyword3 = triad3.keyword
 
-		// Get cues from fourth triad
-		const cues4 = triad4.cues
+		// Get fullPhrases from fourth triad
+		const fullPhrases4 = triad4.fullPhrases
 
-		if (!keyword1 || !keyword2 || !keyword3 || !cues4 || !Array.isArray(cues4) || cues4.length !== 3) {
+		if (!keyword1 || !keyword2 || !keyword3 || !fullPhrases4 || !Array.isArray(fullPhrases4) || fullPhrases4.length !== 3) {
 			return false
 		}
 
-		// Check if keywords of first three triads match the cues of the fourth triad
-		const expectedCues = [keyword1, keyword2, keyword3].sort()
-		const actualCues = [...cues4].sort()
+		// Extract cues from fullPhrases by removing the keyword from each phrase (case-insensitive)
+		// Example: keyword="STOCK", fullPhrases=["OVERSTOCK","STOCK EXCHANGE","WOODSTOCK"]
+		// Result: cues=["OVER","EXCHANGE","WOOD"]
+		// Check if keywords of first three triads match the cues extracted from fullPhrases of the fourth triad
+		// Convert to uppercase for case-insensitive comparison
+		const expectedCues = [keyword1.toUpperCase(), keyword2.toUpperCase(), keyword3.toUpperCase()].sort()
+		const keyword4 = triad4.keyword
+		const keyword4Upper = keyword4.toUpperCase()
+		const actualCues = fullPhrases4
+			.map((phrase) => {
+				const phraseUpper = phrase.toUpperCase()
+				let cue = phrase
+				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER")
+				if (phraseUpper.endsWith(keyword4Upper)) {
+					cue = phrase.slice(0, -keyword4.length).trim()
+				}
+				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
+				else if (phraseUpper.startsWith(keyword4Upper + ' ')) {
+					cue = phrase.slice(keyword4.length + 1).trim()
+				}
+				// Check if phrase starts with keyword (e.g., "STOCKEXCHANGE" → "EXCHANGE")
+				else if (phraseUpper.startsWith(keyword4Upper)) {
+					cue = phrase.slice(keyword4.length).trim()
+				}
+				// Keyword is in the middle or elsewhere, replace it (case-insensitive)
+				else if (phraseUpper.includes(keyword4Upper)) {
+					const index = phraseUpper.indexOf(keyword4Upper)
+					cue = (phrase.slice(0, index) + phrase.slice(index + keyword4.length)).trim()
+				}
+				return cue.toUpperCase()
+			})
+			.sort()
 
 		return expectedCues.every((keyword, index) => keyword === actualCues[index])
 	}
 
 	defaultMessage(): string {
-		return 'Keywords of triad1, triad2, and triad3 must match the cues of triad4'
+		return 'Keywords of triad1, triad2, and triad3 must match the cues extracted from fullPhrases of triad4'
 	}
 }

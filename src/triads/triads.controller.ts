@@ -56,7 +56,7 @@ export class TriadsController {
 		return this.triadsService.deleteTriadGroup(id)
 	}
 
-	@Patch('groups/:id/active')
+	@Patch('groups/:id/status')
 	async updateTriadGroupActive(@Param('id', ParseIntPipe) id: number, @Body() updateDto: Omit<UpdateTriadGroupActiveDto, 'id'>) {
 		return this.triadsService.updateTriadGroupActive(id, updateDto.active)
 	}

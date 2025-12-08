@@ -12,5 +12,5 @@ export class TriadInputDto {
 	@ArrayMaxSize(3)
 	@IsString({ each: true })
 	@ToUpperCase()
-	cues: string[]
+	fullPhrases: string[]
 }
