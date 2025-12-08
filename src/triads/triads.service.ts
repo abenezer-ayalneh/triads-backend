@@ -284,7 +284,12 @@ export class TriadsService {
 			}
 		}
 
-		// Delete triads that are exclusively used by this group
+		// Delete the triad group FIRST to avoid foreign key constraint violations
+		await this.prismaService.triadGroup.delete({
+			where: { id },
+		})
+
+		// Delete triads that are exclusively used by this group (now safe since group is deleted)
 		if (triadsToDelete.length > 0) {
 			await this.prismaService.triad.deleteMany({
 				where: {
@@ -294,11 +299,6 @@ export class TriadsService {
 				},
 			})
 		}
-
-		// Delete the triad group
-		await this.prismaService.triadGroup.delete({
-			where: { id },
-		})
 
 		return { success: true, message: `Triad group ${id} deleted successfully` }
 	}
