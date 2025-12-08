@@ -50,9 +50,17 @@ export class IsFourthTriadCuesValidConstraint implements ValidatorConstraintInte
 			.map((phrase) => {
 				const phraseUpper = phrase.toUpperCase()
 				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER")
+				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
 				if (phraseUpper.endsWith(keyword4Upper)) {
-					cue = phrase.slice(0, -keyword4.length).trim()
+					// Check if there's a separator (hyphen, space, etc.) before the keyword
+					const beforeKeyword = phrase.slice(0, -keyword4.length)
+					const lastChar = beforeKeyword.slice(-1)
+					// If the last character before keyword is a separator, remove it too
+					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+						cue = beforeKeyword.slice(0, -1).trim()
+					} else {
+						cue = beforeKeyword.trim()
+					}
 				}
 				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
 				else if (phraseUpper.startsWith(keyword4Upper + ' ')) {

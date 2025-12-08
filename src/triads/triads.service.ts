@@ -42,10 +42,18 @@ export class TriadsService {
 			const keywordUpper = keyword.toUpperCase()
 			return fullPhrases.map((phrase) => {
 				const phraseUpper = phrase.toUpperCase()
-				// Try to remove from the end first (most common case: "CUE KEYWORD")
+				// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
 				let cue = phrase
 				if (phraseUpper.endsWith(keywordUpper)) {
-					cue = phrase.slice(0, -keyword.length).trim()
+					// Check if there's a separator (hyphen, space, etc.) before the keyword
+					const beforeKeyword = phrase.slice(0, -keyword.length)
+					const lastChar = beforeKeyword.slice(-1)
+					// If the last character before keyword is a separator, remove it too
+					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+						cue = beforeKeyword.slice(0, -1).trim()
+					} else {
+						cue = beforeKeyword.trim()
+					}
 				} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
 					// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
 					cue = phrase.slice(keyword.length + 1).trim()
@@ -342,9 +350,17 @@ export class TriadsService {
 			return fullPhrases.map((phrase) => {
 				const phraseUpper = phrase.toUpperCase()
 				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER")
+				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
 				if (phraseUpper.endsWith(keywordUpper)) {
-					cue = phrase.slice(0, -keyword.length).trim()
+					// Check if there's a separator (hyphen, space, etc.) before the keyword
+					const beforeKeyword = phrase.slice(0, -keyword.length)
+					const lastChar = beforeKeyword.slice(-1)
+					// If the last character before keyword is a separator, remove it too
+					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+						cue = beforeKeyword.slice(0, -1).trim()
+					} else {
+						cue = beforeKeyword.trim()
+					}
 				}
 				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
 				else if (phraseUpper.startsWith(keywordUpper + ' ')) {
@@ -488,9 +504,17 @@ export class TriadsService {
 			return fullPhrases.map((phrase) => {
 				const phraseUpper = phrase.toUpperCase()
 				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER")
+				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
 				if (phraseUpper.endsWith(keywordUpper)) {
-					cue = phrase.slice(0, -keyword.length).trim()
+					// Check if there's a separator (hyphen, space, etc.) before the keyword
+					const beforeKeyword = phrase.slice(0, -keyword.length)
+					const lastChar = beforeKeyword.slice(-1)
+					// If the last character before keyword is a separator, remove it too
+					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+						cue = beforeKeyword.slice(0, -1).trim()
+					} else {
+						cue = beforeKeyword.trim()
+					}
 				}
 				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
 				else if (phraseUpper.startsWith(keywordUpper + ' ')) {
