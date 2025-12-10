@@ -43,6 +43,11 @@ export class TriadsController {
 		return this.triadsService.getFourthTriadCues(getFourthTriadDto)
 	}
 
+	@Get('groups/:id/triads')
+	async getTriadsByGroupId(@Param('id', ParseIntPipe) id: number) {
+		return this.triadsService.getTriadsByGroupId(id)
+	}
+
 	@Get('groups')
 	async getTriadGroups(@Query() getTriadGroupsDto: GetTriadGroupsDto) {
 		const offset = getTriadGroupsDto.offset ?? 0

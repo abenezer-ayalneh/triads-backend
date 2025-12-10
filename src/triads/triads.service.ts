@@ -13,80 +13,9 @@ import { UpdateTriadGroupDto } from './dto/update-triad-group.dto'
 export class TriadsService {
 	constructor(private readonly prismaService: PrismaService) {}
 
-	// Validation helper: Check if keyword is substring of each fullPhrase (case-insensitive)
-	private validateKeywordSubstring(triad: TriadInputDto): void {
-		if (!triad.fullPhrases || triad.fullPhrases.length === 0) {
-			throw new BadRequestException('Triad must have fullPhrases')
-		}
-		if (!triad.keyword) {
-			throw new BadRequestException('Triad must have a keyword')
-		}
-
-		// Convert to uppercase for case-insensitive comparison
-		const keywordUpper = triad.keyword.toUpperCase()
-		const invalidPhrases = triad.fullPhrases.filter((phrase) => !phrase.toUpperCase().includes(keywordUpper))
-		if (invalidPhrases.length > 0) {
-			throw new BadRequestException(
-				`Keyword "${triad.keyword}" must be a substring of each fullPhrase. Invalid fullPhrases: ${invalidPhrases.join(', ')}`,
-			)
-		}
-	}
-
-	// Validation helper: Check if keywords of first 3 triads match cues extracted from fullPhrases of 4th triad (case-insensitive)
-	private validateFourthTriadCues(triad1: TriadInputDto, triad2: TriadInputDto, triad3: TriadInputDto, triad4: TriadInputDto): void {
-		// Convert to uppercase for case-insensitive comparison
-		const expectedCues = [triad1.keyword.toUpperCase(), triad2.keyword.toUpperCase(), triad3.keyword.toUpperCase()].sort()
-
-		// Extract cues from fullPhrases by removing the keyword from each phrase (case-insensitive)
-		const extractCues = (fullPhrases: string[], keyword: string): string[] => {
-			const keywordUpper = keyword.toUpperCase()
-			return fullPhrases.map((phrase) => {
-				const phraseUpper = phrase.toUpperCase()
-				// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
-				let cue = phrase
-				if (phraseUpper.endsWith(keywordUpper)) {
-					// Check if there's a separator (hyphen, space, etc.) before the keyword
-					const beforeKeyword = phrase.slice(0, -keyword.length)
-					const lastChar = beforeKeyword.slice(-1)
-					// If the last character before keyword is a separator, remove it too
-					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
-						cue = beforeKeyword.slice(0, -1).trim()
-					} else {
-						cue = beforeKeyword.trim()
-					}
-				} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
-					// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-					cue = phrase.slice(keyword.length + 1).trim()
-				} else if (phraseUpper.startsWith(keywordUpper)) {
-					// If keyword is at the start: "KEYWORD CUE"
-					cue = phrase.slice(keyword.length).trim()
-				} else if (phraseUpper.includes(keywordUpper)) {
-					// Keyword is in the middle, replace it (case-insensitive)
-					// Find the position and remove the actual keyword from original phrase
-					const index = phraseUpper.indexOf(keywordUpper)
-					cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
-				}
-				return cue.toUpperCase()
-			})
-		}
-
-		const actualCues = extractCues(triad4.fullPhrases, triad4.keyword).sort()
-
-		if (expectedCues.length !== actualCues.length) {
-			throw new BadRequestException('Keywords of triad1, triad2, and triad3 must match the cues extracted from fullPhrases of triad4')
-		}
-
-		const mismatch = expectedCues.some((keyword, index) => keyword !== actualCues[index])
-		if (mismatch) {
-			throw new BadRequestException(
-				`Keywords of triad1 (${triad1.keyword}), triad2 (${triad2.keyword}), and triad3 (${triad3.keyword}) must match the cues extracted from fullPhrases of triad4 (${triad4.fullPhrases.join(', ')})`,
-			)
-		}
-	}
-
 	async getCues() {
 		// Optimized query using JOINs instead of nested subqueries for better performance
-		const randomTriadCues = await this.prismaService.$queryRawUnsafe<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(`
+		const triadGroups = await this.prismaService.$queryRawUnsafe<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(`
 			SELECT 
 				tg.id,
 				t1.cues as triad1,
@@ -101,16 +30,16 @@ export class TriadsService {
 			LIMIT 1;
 		`)
 
-		if (!randomTriadCues || randomTriadCues.length === 0) {
+		if (!triadGroups || triadGroups.length === 0) {
 			throw new Error('No triad groups found in database')
 		}
 
-		const randomTriadCue = randomTriadCues[0]
-		if (!randomTriadCue.triad1 || !randomTriadCue.triad2 || !randomTriadCue.triad3) {
+		const triadGroup = triadGroups[0]
+		if (!triadGroup.triad1 || !triadGroup.triad2 || !triadGroup.triad3) {
 			throw new Error('Invalid triad group data')
 		}
 
-		return [...randomTriadCue.triad1, ...randomTriadCue.triad2, ...randomTriadCue.triad3].sort(() => Math.random() - 0.5)
+		return { triadGroupId: triadGroup.id, cues: [...triadGroup.triad1, ...triadGroup.triad2, ...triadGroup.triad3].sort(() => Math.random() - 0.5) }
 	}
 
 	async getMatchedTriad(cues: string[]): Promise<{ id: number; keyword: string; cues: string[]; fullPhrases: string[] } | undefined> {
@@ -187,6 +116,45 @@ export class TriadsService {
 		})
 
 		return triadGroup?.Triad4?.cues
+	}
+
+	async getTriadsByGroupId(id: number) {
+		const triadGroup = await this.prismaService.triadGroup.findUnique({
+			where: { id },
+			select: {
+				Triad1: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad2: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad3: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		if (!triadGroup) {
+			throw new NotFoundException(`Triad group with ID ${id} not found`)
+		}
+
+		// Return triads 1-3 as an array (skipping the fourth triad)
+		return [triadGroup.Triad1, triadGroup.Triad2, triadGroup.Triad3]
 	}
 
 	async getTriadGroups(offset: number, limit: number, search?: string) {
@@ -620,6 +588,77 @@ export class TriadsService {
 			triad2: updated.Triad2,
 			triad3: updated.Triad3,
 			triad4: updated.Triad4,
+		}
+	}
+
+	// Validation helper: Check if keyword is substring of each fullPhrase (case-insensitive)
+	private validateKeywordSubstring(triad: TriadInputDto): void {
+		if (!triad.fullPhrases || triad.fullPhrases.length === 0) {
+			throw new BadRequestException('Triad must have fullPhrases')
+		}
+		if (!triad.keyword) {
+			throw new BadRequestException('Triad must have a keyword')
+		}
+
+		// Convert to uppercase for case-insensitive comparison
+		const keywordUpper = triad.keyword.toUpperCase()
+		const invalidPhrases = triad.fullPhrases.filter((phrase) => !phrase.toUpperCase().includes(keywordUpper))
+		if (invalidPhrases.length > 0) {
+			throw new BadRequestException(
+				`Keyword "${triad.keyword}" must be a substring of each fullPhrase. Invalid fullPhrases: ${invalidPhrases.join(', ')}`,
+			)
+		}
+	}
+
+	// Validation helper: Check if keywords of first 3 triads match cues extracted from fullPhrases of 4th triad (case-insensitive)
+	private validateFourthTriadCues(triad1: TriadInputDto, triad2: TriadInputDto, triad3: TriadInputDto, triad4: TriadInputDto): void {
+		// Convert to uppercase for case-insensitive comparison
+		const expectedCues = [triad1.keyword.toUpperCase(), triad2.keyword.toUpperCase(), triad3.keyword.toUpperCase()].sort()
+
+		// Extract cues from fullPhrases by removing the keyword from each phrase (case-insensitive)
+		const extractCues = (fullPhrases: string[], keyword: string): string[] => {
+			const keywordUpper = keyword.toUpperCase()
+			return fullPhrases.map((phrase) => {
+				const phraseUpper = phrase.toUpperCase()
+				// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
+				let cue = phrase
+				if (phraseUpper.endsWith(keywordUpper)) {
+					// Check if there's a separator (hyphen, space, etc.) before the keyword
+					const beforeKeyword = phrase.slice(0, -keyword.length)
+					const lastChar = beforeKeyword.slice(-1)
+					// If the last character before keyword is a separator, remove it too
+					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+						cue = beforeKeyword.slice(0, -1).trim()
+					} else {
+						cue = beforeKeyword.trim()
+					}
+				} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
+					// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
+					cue = phrase.slice(keyword.length + 1).trim()
+				} else if (phraseUpper.startsWith(keywordUpper)) {
+					// If keyword is at the start: "KEYWORD CUE"
+					cue = phrase.slice(keyword.length).trim()
+				} else if (phraseUpper.includes(keywordUpper)) {
+					// Keyword is in the middle, replace it (case-insensitive)
+					// Find the position and remove the actual keyword from original phrase
+					const index = phraseUpper.indexOf(keywordUpper)
+					cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
+				}
+				return cue.toUpperCase()
+			})
+		}
+
+		const actualCues = extractCues(triad4.fullPhrases, triad4.keyword).sort()
+
+		if (expectedCues.length !== actualCues.length) {
+			throw new BadRequestException('Keywords of triad1, triad2, and triad3 must match the cues extracted from fullPhrases of triad4')
+		}
+
+		const mismatch = expectedCues.some((keyword, index) => keyword !== actualCues[index])
+		if (mismatch) {
+			throw new BadRequestException(
+				`Keywords of triad1 (${triad1.keyword}), triad2 (${triad2.keyword}), and triad3 (${triad3.keyword}) must match the cues extracted from fullPhrases of triad4 (${triad4.fullPhrases.join(', ')})`,
+			)
 		}
 	}
 }
