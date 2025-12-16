@@ -654,7 +654,7 @@ export class TriadsService {
 			throw new BadRequestException('Keywords of triad1, triad2, and triad3 must match the cues extracted from fullPhrases of triad4')
 		}
 
-		const mismatch = expectedCues.some((keyword, index) => keyword !== actualCues[index])
+		const mismatch = expectedCues.some((keyword, index) => actualCues[index].includes(keyword))
 		if (mismatch) {
 			throw new BadRequestException(
 				`Keywords of triad1 (${triad1.keyword}), triad2 (${triad2.keyword}), and triad3 (${triad3.keyword}) must match the cues extracted from fullPhrases of triad4 (${triad4.fullPhrases.join(', ')})`,
