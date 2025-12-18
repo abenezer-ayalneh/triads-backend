@@ -1,5 +1,6 @@
+import { Difficulty } from '@prisma/client'
 import { Type } from 'class-transformer'
-import { Validate, ValidateNested } from 'class-validator'
+import { IsEnum, Validate, ValidateNested } from 'class-validator'
 
 import { IsFourthTriadCuesValidConstraint } from '../../shared/validators/fourth-triad-cues.validator'
 import { TriadInputDto } from './triad-input.dto'
@@ -21,4 +22,9 @@ export class CreateTriadGroupDto {
 	@ValidateNested()
 	@Type(() => TriadInputDto)
 	triad4: TriadInputDto
+
+	@IsEnum(Difficulty, {
+		message: 'Difficulty must be one of: EASY, MEDIUM, HARD',
+	})
+	difficulty: Difficulty
 }

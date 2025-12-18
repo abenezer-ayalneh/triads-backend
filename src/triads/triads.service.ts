@@ -4,6 +4,7 @@ import { isEmpty, xor } from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateTriadGroupDto } from './dto/create-triad-group.dto'
+import { DifficultyFilter, GetCuesDto } from './dto/get-cues.dto'
 import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
 import { GetHintDto } from './dto/get-hint.dto'
 import { TriadInputDto } from './dto/triad-input.dto'
@@ -13,25 +14,57 @@ import { UpdateTriadGroupDto } from './dto/update-triad-group.dto'
 export class TriadsService {
 	constructor(private readonly prismaService: PrismaService) {}
 
-	async getCues() {
+	async getCues(getCuesDto?: GetCuesDto) {
+		// Determine if we should filter by difficulty
+		const difficulty = getCuesDto?.difficulty || DifficultyFilter.RANDOM
+		const shouldFilterByDifficulty = difficulty !== DifficultyFilter.RANDOM
+
 		// Optimized query using JOINs instead of nested subqueries for better performance
-		const triadGroups = await this.prismaService.$queryRawUnsafe<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(`
-			SELECT 
-				tg.id,
-				t1.cues as triad1,
-				t2.cues as triad2,
-				t3.cues as triad3
-			FROM "triadGroups" tg
-			INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
-			INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
-			INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
-			WHERE tg.active = true
-			ORDER BY random()
-			LIMIT 1;
-		`)
+		// Use parameterized query to prevent SQL injection
+		let triadGroups: { id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]
+
+		if (shouldFilterByDifficulty) {
+			// Use Prisma.sql for safe parameterization
+			triadGroups = await this.prismaService.$queryRaw<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(
+				Prisma.sql`
+					SELECT 
+						tg.id,
+						t1.cues as triad1,
+						t2.cues as triad2,
+						t3.cues as triad3
+					FROM "triadGroups" tg
+					INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
+					INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
+					INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
+					WHERE tg.active = true AND tg.difficulty = ${difficulty}::"Difficulty"
+					ORDER BY random()
+					LIMIT 1;
+				`,
+			)
+		} else {
+			triadGroups = await this.prismaService.$queryRawUnsafe<{ id: number; triad1: string[]; triad2: string[]; triad3: string[] }[]>(`
+				SELECT 
+					tg.id,
+					t1.cues as triad1,
+					t2.cues as triad2,
+					t3.cues as triad3
+				FROM "triadGroups" tg
+				INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
+				INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
+				INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
+				WHERE tg.active = true
+				ORDER BY random()
+				LIMIT 1;
+			`)
+		}
 
 		if (!triadGroups || triadGroups.length === 0) {
-			throw new Error('No triad groups found in database')
+			const difficultyMessage = shouldFilterByDifficulty ? ` with difficulty ${difficulty}` : ''
+			return {
+				triadGroupId: null,
+				cues: null,
+				message: `No active triad groups found${difficultyMessage}`,
+			}
 		}
 
 		const triadGroup = triadGroups[0]
@@ -181,6 +214,7 @@ export class TriadsService {
 			select: {
 				id: true,
 				active: true,
+				difficulty: true,
 				Triad1: {
 					select: {
 						id: true,
@@ -220,6 +254,7 @@ export class TriadsService {
 		return triadGroups.map((group) => ({
 			id: group.id,
 			active: group.active,
+			difficulty: group.difficulty,
 			triad1: group.Triad1,
 			triad2: group.Triad2,
 			triad3: group.Triad3,
@@ -389,10 +424,12 @@ export class TriadsService {
 				triad3Id: triad3.id,
 				triad4Id: triad4.id,
 				active: true,
+				difficulty: createDto.difficulty,
 			},
 			select: {
 				id: true,
 				active: true,
+				difficulty: true,
 				Triad1: {
 					select: {
 						id: true,
@@ -432,6 +469,7 @@ export class TriadsService {
 		return {
 			id: triadGroup.id,
 			active: triadGroup.active,
+			difficulty: triadGroup.difficulty,
 			triad1: triadGroup.Triad1,
 			triad2: triadGroup.Triad2,
 			triad3: triadGroup.Triad3,
@@ -539,12 +577,21 @@ export class TriadsService {
 			},
 		})
 
+		// Update the triad group difficulty
+		await this.prismaService.triadGroup.update({
+			where: { id: updateDto.id },
+			data: {
+				difficulty: updateDto.difficulty,
+			},
+		})
+
 		// Fetch and return the updated triad group
 		const updated = await this.prismaService.triadGroup.findUnique({
 			where: { id: updateDto.id },
 			select: {
 				id: true,
 				active: true,
+				difficulty: true,
 				Triad1: {
 					select: {
 						id: true,
@@ -584,6 +631,7 @@ export class TriadsService {
 		return {
 			id: updated.id,
 			active: updated.active,
+			difficulty: updated.difficulty,
 			triad1: updated.Triad1,
 			triad2: updated.Triad2,
 			triad3: updated.Triad3,

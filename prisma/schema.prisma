@@ -13,6 +13,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
 model Triad {
   id          Int      @id @default(autoincrement())
   keyword     String
@@ -28,12 +34,13 @@ model Triad {
 }
 
 model TriadGroup {
-  id       Int     @id @default(autoincrement())
-  triad1Id Int
-  triad2Id Int
-  triad3Id Int
-  triad4Id Int
-  active   Boolean @default(true)
+  id        Int        @id @default(autoincrement())
+  triad1Id  Int
+  triad2Id  Int
+  triad3Id  Int
+  triad4Id  Int
+  active    Boolean    @default(true)
+  difficulty Difficulty @default(EASY)
 
   Triad1 Triad @relation(fields: [triad1Id], references: [id], name: "firstTriad")
   Triad2 Triad @relation(fields: [triad2Id], references: [id], name: "secondTriad")

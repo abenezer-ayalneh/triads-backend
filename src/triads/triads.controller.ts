@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Q
 import { CheckAnswerDto } from './dto/check-answer.dto'
 import { CheckSolutionDto } from './dto/check-solution.dto'
 import { CreateTriadGroupDto } from './dto/create-triad-group.dto'
+import { GetCuesDto } from './dto/get-cues.dto'
 import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
 import { GetHintDto } from './dto/get-hint.dto'
 import { GetTriadGroupsDto } from './dto/get-triad-groups.dto'
@@ -15,8 +16,8 @@ export class TriadsController {
 	constructor(private readonly triadsService: TriadsService) {}
 
 	@Get('cues')
-	getCues() {
-		return this.triadsService.getCues()
+	getCues(@Query() getCuesDto: GetCuesDto) {
+		return this.triadsService.getCues(getCuesDto)
 	}
 
 	@Get('hint')
