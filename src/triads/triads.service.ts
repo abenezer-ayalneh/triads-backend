@@ -36,7 +36,7 @@ export class TriadsService {
 					INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
 					INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
 					INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
-					WHERE tg.active = true AND tg.difficulty = ${difficulty}::"Difficulty" AND tg.id = 222
+					WHERE tg.active = true AND tg.difficulty = ${difficulty}::"Difficulty"
 					ORDER BY random()
 					LIMIT 1;
 				`,
@@ -52,7 +52,7 @@ export class TriadsService {
 				INNER JOIN "triads" t1 ON t1.id = tg."triad1Id"
 				INNER JOIN "triads" t2 ON t2.id = tg."triad2Id"
 				INNER JOIN "triads" t3 ON t3.id = tg."triad3Id"
-				WHERE tg.active = true AND tg.id = 222
+				WHERE tg.active = true
 				ORDER BY random()
 				LIMIT 1;
 			`)
