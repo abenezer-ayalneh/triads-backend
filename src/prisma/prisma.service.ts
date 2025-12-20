@@ -5,9 +5,7 @@ import { PrismaClient } from '@prisma/client'
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
 	constructor() {
 		super({
-			log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['query', 'error', 'warn'],
-			// Configure connection pool to prevent memory issues
-			// These settings help prevent connection exhaustion on limited resources
+			// log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['query', 'error', 'warn'],
 		})
 	}
 

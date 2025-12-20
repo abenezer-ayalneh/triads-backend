@@ -162,7 +162,6 @@ export class ImportService {
 			return {
 				success: true,
 				message: `Imported ${stats.total} triad groups successfully (Easy: ${stats.easy}, Medium: ${stats.medium}, Hard: ${stats.hard})`,
-				triadGroups: allTriadGroups,
 				statistics: {
 					total: stats.total,
 					easy: stats.easy,
