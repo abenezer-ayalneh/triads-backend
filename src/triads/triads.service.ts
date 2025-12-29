@@ -312,7 +312,7 @@ export class TriadsService {
 			throw new NotFoundException(`Triad group with ID ${id} not found`)
 		}
 
-		const updated = await this.prismaService.triadGroup.update({
+		return await this.prismaService.triadGroup.update({
 			where: { id },
 			data: { active },
 			select: {
@@ -320,8 +320,6 @@ export class TriadsService {
 				active: true,
 			},
 		})
-
-		return updated
 	}
 
 	async createTriadGroup(createDto: CreateTriadGroupDto) {
@@ -334,49 +332,11 @@ export class TriadsService {
 		// Validate fourth triad cues
 		this.validateFourthTriadCues(createDto.triad1, createDto.triad2, createDto.triad3, createDto.triad4)
 
-		// Helper function to extract cues from fullPhrases by removing the keyword (case-insensitive)
-		// Example: keyword="STOCK", fullPhrases=["OVERSTOCK","STOCK EXCHANGE","WOODSTOCK"]
-		// Result: cues=["OVER","EXCHANGE","WOOD"]
-		const extractCues = (fullPhrases: string[], keyword: string): string[] => {
-			const keywordUpper = keyword.toUpperCase()
-			return fullPhrases.map((phrase) => {
-				const phraseUpper = phrase.toUpperCase()
-				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
-				if (phraseUpper.endsWith(keywordUpper)) {
-					// Check if there's a separator (hyphen, space, etc.) before the keyword
-					const beforeKeyword = phrase.slice(0, -keyword.length)
-					const lastChar = beforeKeyword.slice(-1)
-					// If the last character before keyword is a separator, remove it too
-					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
-						cue = beforeKeyword.slice(0, -1).trim()
-					} else {
-						cue = beforeKeyword.trim()
-					}
-				}
-				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keywordUpper + ' ')) {
-					cue = phrase.slice(keyword.length + 1).trim()
-				}
-				// Check if phrase starts with keyword (e.g., "STOCKEXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keywordUpper)) {
-					cue = phrase.slice(keyword.length).trim()
-				}
-				// Keyword is in the middle or elsewhere, replace it (case-insensitive)
-				else if (phraseUpper.includes(keywordUpper)) {
-					const index = phraseUpper.indexOf(keywordUpper)
-					cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
-				}
-				// Convert to uppercase before returning
-				return cue.toUpperCase()
-			})
-		}
-
 		// Create all 4 triads
 		const triad1 = await this.prismaService.triad.create({
 			data: {
 				keyword: createDto.triad1.keyword,
-				cues: extractCues(createDto.triad1.fullPhrases, createDto.triad1.keyword),
+				cues: this.extractCues(createDto.triad1.fullPhrases, createDto.triad1.keyword),
 				fullPhrases: createDto.triad1.fullPhrases,
 			},
 		})
@@ -384,7 +344,7 @@ export class TriadsService {
 		const triad2 = await this.prismaService.triad.create({
 			data: {
 				keyword: createDto.triad2.keyword,
-				cues: extractCues(createDto.triad2.fullPhrases, createDto.triad2.keyword),
+				cues: this.extractCues(createDto.triad2.fullPhrases, createDto.triad2.keyword),
 				fullPhrases: createDto.triad2.fullPhrases,
 			},
 		})
@@ -392,7 +352,7 @@ export class TriadsService {
 		const triad3 = await this.prismaService.triad.create({
 			data: {
 				keyword: createDto.triad3.keyword,
-				cues: extractCues(createDto.triad3.fullPhrases, createDto.triad3.keyword),
+				cues: this.extractCues(createDto.triad3.fullPhrases, createDto.triad3.keyword),
 				fullPhrases: createDto.triad3.fullPhrases,
 			},
 		})
@@ -400,7 +360,7 @@ export class TriadsService {
 		const triad4 = await this.prismaService.triad.create({
 			data: {
 				keyword: createDto.triad4.keyword,
-				cues: extractCues(createDto.triad4.fullPhrases, createDto.triad4.keyword),
+				cues: this.extractCues(createDto.triad4.fullPhrases, createDto.triad4.keyword),
 				fullPhrases: createDto.triad4.fullPhrases,
 			},
 		})
@@ -491,50 +451,12 @@ export class TriadsService {
 			throw new NotFoundException(`Triad group with ID ${updateDto.id} not found`)
 		}
 
-		// Helper function to extract cues from fullPhrases by removing the keyword (case-insensitive)
-		// Example: keyword="STOCK", fullPhrases=["OVERSTOCK","STOCK EXCHANGE","WOODSTOCK"]
-		// Result: cues=["OVER","EXCHANGE","WOOD"]
-		const extractCues = (fullPhrases: string[], keyword: string): string[] => {
-			const keywordUpper = keyword.toUpperCase()
-			return fullPhrases.map((phrase) => {
-				const phraseUpper = phrase.toUpperCase()
-				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
-				if (phraseUpper.endsWith(keywordUpper)) {
-					// Check if there's a separator (hyphen, space, etc.) before the keyword
-					const beforeKeyword = phrase.slice(0, -keyword.length)
-					const lastChar = beforeKeyword.slice(-1)
-					// If the last character before keyword is a separator, remove it too
-					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
-						cue = beforeKeyword.slice(0, -1).trim()
-					} else {
-						cue = beforeKeyword.trim()
-					}
-				}
-				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keywordUpper + ' ')) {
-					cue = phrase.slice(keyword.length + 1).trim()
-				}
-				// Check if phrase starts with keyword (e.g., "STOCKEXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keywordUpper)) {
-					cue = phrase.slice(keyword.length).trim()
-				}
-				// Keyword is in the middle or elsewhere, replace it (case-insensitive)
-				else if (phraseUpper.includes(keywordUpper)) {
-					const index = phraseUpper.indexOf(keywordUpper)
-					cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
-				}
-				// Convert to uppercase before returning
-				return cue.toUpperCase()
-			})
-		}
-
 		// Update all 4 triads
 		await this.prismaService.triad.update({
 			where: { id: triadGroup.triad1Id },
 			data: {
 				keyword: updateDto.triad1.keyword,
-				cues: extractCues(updateDto.triad1.fullPhrases, updateDto.triad1.keyword),
+				cues: this.extractCues(updateDto.triad1.fullPhrases, updateDto.triad1.keyword),
 				fullPhrases: updateDto.triad1.fullPhrases,
 			},
 		})
@@ -543,7 +465,7 @@ export class TriadsService {
 			where: { id: triadGroup.triad2Id },
 			data: {
 				keyword: updateDto.triad2.keyword,
-				cues: extractCues(updateDto.triad2.fullPhrases, updateDto.triad2.keyword),
+				cues: this.extractCues(updateDto.triad2.fullPhrases, updateDto.triad2.keyword),
 				fullPhrases: updateDto.triad2.fullPhrases,
 			},
 		})
@@ -552,7 +474,7 @@ export class TriadsService {
 			where: { id: triadGroup.triad3Id },
 			data: {
 				keyword: updateDto.triad3.keyword,
-				cues: extractCues(updateDto.triad3.fullPhrases, updateDto.triad3.keyword),
+				cues: this.extractCues(updateDto.triad3.fullPhrases, updateDto.triad3.keyword),
 				fullPhrases: updateDto.triad3.fullPhrases,
 			},
 		})
@@ -561,7 +483,7 @@ export class TriadsService {
 			where: { id: triadGroup.triad4Id },
 			data: {
 				keyword: updateDto.triad4.keyword,
-				cues: extractCues(updateDto.triad4.fullPhrases, updateDto.triad4.keyword),
+				cues: this.extractCues(updateDto.triad4.fullPhrases, updateDto.triad4.keyword),
 				fullPhrases: updateDto.triad4.fullPhrases,
 			},
 		})
@@ -653,49 +575,56 @@ export class TriadsService {
 		const expectedCues = [triad1.keyword.toUpperCase(), triad2.keyword.toUpperCase(), triad3.keyword.toUpperCase()].sort()
 
 		// Extract cues from fullPhrases by removing the keyword from each phrase (case-insensitive)
-		const extractCues = (fullPhrases: string[], keyword: string): string[] => {
-			const keywordUpper = keyword.toUpperCase()
-			return fullPhrases.map((phrase) => {
-				const phraseUpper = phrase.toUpperCase()
-				// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
-				let cue = phrase
-				if (phraseUpper.endsWith(keywordUpper)) {
-					// Check if there's a separator (hyphen, space, etc.) before the keyword
-					const beforeKeyword = phrase.slice(0, -keyword.length)
-					const lastChar = beforeKeyword.slice(-1)
-					// If the last character before keyword is a separator, remove it too
-					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
-						cue = beforeKeyword.slice(0, -1).trim()
-					} else {
-						cue = beforeKeyword.trim()
-					}
-				} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
-					// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-					cue = phrase.slice(keyword.length + 1).trim()
-				} else if (phraseUpper.startsWith(keywordUpper)) {
-					// If keyword is at the start: "KEYWORD CUE"
-					cue = phrase.slice(keyword.length).trim()
-				} else if (phraseUpper.includes(keywordUpper)) {
-					// Keyword is in the middle, replace it (case-insensitive)
-					// Find the position and remove the actual keyword from original phrase
-					const index = phraseUpper.indexOf(keywordUpper)
-					cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
-				}
-				return cue.toUpperCase()
-			})
-		}
-
-		const actualCues = extractCues(triad4.fullPhrases, triad4.keyword).sort()
+		const actualCues = this.extractCues(triad4.fullPhrases, triad4.keyword).sort()
 
 		if (expectedCues.length !== actualCues.length) {
 			throw new BadRequestException('Keywords of triad1, triad2, and triad3 must match the cues extracted from fullPhrases of triad4')
 		}
 
-		const mismatch = expectedCues.some((keyword, index) => !actualCues[index].includes(keyword))
+		let mismatch = false
+
+		for (const expectedCue of expectedCues) {
+			mismatch = !actualCues.some((actualCue) => actualCue.includes(expectedCue))
+		}
 		if (mismatch) {
 			throw new BadRequestException(
 				`Keywords of triad1 (${triad1.keyword}), triad2 (${triad2.keyword}), and triad3 (${triad3.keyword}) must match the cues extracted from fullPhrases of triad4 (${triad4.fullPhrases.join(', ')})`,
 			)
 		}
+	}
+
+	// Helper function to extract cues from fullPhrases by removing the keyword (case-insensitive)
+	// Example: keyword="STOCK", fullPhrases=["OVERSTOCK","STOCK EXCHANGE","WOODSTOCK"]
+	// Result: cues=["OVER","EXCHANGE","WOOD"]
+	private extractCues(fullPhrases: string[], keyword: string): string[] {
+		const keywordUpper = keyword.toUpperCase()
+		return fullPhrases.map((phrase) => {
+			const phraseUpper = phrase.toUpperCase()
+			// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
+			let cue = phrase
+			if (phraseUpper.endsWith(keywordUpper)) {
+				// Check if there's a separator (hyphen, space, etc.) before the keyword
+				const beforeKeyword = phrase.slice(0, -keyword.length)
+				const lastChar = beforeKeyword.slice(-1)
+				// If the last character before keyword is a separator, remove it too
+				if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
+					cue = beforeKeyword.slice(0, -1).trim()
+				} else {
+					cue = beforeKeyword.trim()
+				}
+			} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
+				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
+				cue = phrase.slice(keyword.length + 1).trim()
+			} else if (phraseUpper.startsWith(keywordUpper)) {
+				// If keyword is at the start: "KEYWORD CUE"
+				cue = phrase.slice(keyword.length).trim()
+			} else if (phraseUpper.includes(keywordUpper)) {
+				// Keyword is in the middle, replace it (case-insensitive)
+				// Find the position and remove the actual keyword from original phrase
+				const index = phraseUpper.indexOf(keywordUpper)
+				cue = (phrase.slice(0, index) + phrase.slice(index + keyword.length)).trim()
+			}
+			return cue.toUpperCase()
+		})
 	}
 }

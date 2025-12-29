@@ -12,7 +12,6 @@ export class UpdateTriadGroupDto {
 
 	@ValidateNested()
 	@Type(() => TriadInputDto)
-	@Validate(IsFourthTriadCuesValidConstraint)
 	triad1: TriadInputDto
 
 	@ValidateNested()
@@ -25,6 +24,7 @@ export class UpdateTriadGroupDto {
 
 	@ValidateNested()
 	@Type(() => TriadInputDto)
+	@Validate(IsFourthTriadCuesValidConstraint)
 	triad4: TriadInputDto
 
 	@IsEnum(Difficulty, {
