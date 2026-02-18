@@ -600,24 +600,20 @@ export class TriadsService {
 		const keywordUpper = keyword.toUpperCase()
 		return fullPhrases.map((phrase) => {
 			const phraseUpper = phrase.toUpperCase()
-			// Try to remove from the end first (most common case: "CUE KEYWORD" or "CUE-KEYWORD")
 			let cue = phrase
-			if (phraseUpper.endsWith(keywordUpper)) {
-				// Check if there's a separator (hyphen, space, etc.) before the keyword
+			// Check startsWith before endsWith so "EVEN STEVEN" yields "STEVEN" (not "EVEN ST")
+			if (phraseUpper.startsWith(keywordUpper + ' ')) {
+				cue = phrase.slice(keyword.length + 1).trim()
+			} else if (phraseUpper.startsWith(keywordUpper)) {
+				cue = phrase.slice(keyword.length).trim()
+			} else if (phraseUpper.endsWith(keywordUpper)) {
 				const beforeKeyword = phrase.slice(0, -keyword.length)
 				const lastChar = beforeKeyword.slice(-1)
-				// If the last character before keyword is a separator, remove it too
 				if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
 					cue = beforeKeyword.slice(0, -1).trim()
 				} else {
 					cue = beforeKeyword.trim()
 				}
-			} else if (phraseUpper.startsWith(keywordUpper + ' ')) {
-				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-				cue = phrase.slice(keyword.length + 1).trim()
-			} else if (phraseUpper.startsWith(keywordUpper)) {
-				// If keyword is at the start: "KEYWORD CUE"
-				cue = phrase.slice(keyword.length).trim()
 			} else if (phraseUpper.includes(keywordUpper)) {
 				// Keyword is in the middle, replace it (case-insensitive)
 				// Find the position and remove the actual keyword from original phrase

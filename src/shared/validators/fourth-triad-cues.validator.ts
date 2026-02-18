@@ -47,31 +47,23 @@ export class IsFourthTriadCuesValidConstraint implements ValidatorConstraintInte
 		const keyword4 = triad4.keyword
 		const keyword4Upper = keyword4.toUpperCase()
 		const actualCues = fullPhrases4
-			.map((phrase) => {
+			.map((phrase: string) => {
 				const phraseUpper = phrase.toUpperCase()
 				let cue = phrase
-				// Check if phrase ends with keyword (e.g., "OVERSTOCK" → "OVER" or "12-STEP" → "12")
-				if (phraseUpper.endsWith(keyword4Upper)) {
-					// Check if there's a separator (hyphen, space, etc.) before the keyword
+				// Check startsWith before endsWith so "EVEN STEVEN" yields "STEVEN" (not "EVEN ST")
+				if (phraseUpper.startsWith(keyword4Upper + ' ')) {
+					cue = phrase.slice(keyword4.length + 1).trim()
+				} else if (phraseUpper.startsWith(keyword4Upper)) {
+					cue = phrase.slice(keyword4.length).trim()
+				} else if (phraseUpper.endsWith(keyword4Upper)) {
 					const beforeKeyword = phrase.slice(0, -keyword4.length)
 					const lastChar = beforeKeyword.slice(-1)
-					// If the last character before keyword is a separator, remove it too
 					if (lastChar === '-' || lastChar === ' ' || lastChar === '_') {
 						cue = beforeKeyword.slice(0, -1).trim()
 					} else {
 						cue = beforeKeyword.trim()
 					}
-				}
-				// Check if phrase starts with keyword followed by space (e.g., "STOCK EXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keyword4Upper + ' ')) {
-					cue = phrase.slice(keyword4.length + 1).trim()
-				}
-				// Check if phrase starts with keyword (e.g., "STOCKEXCHANGE" → "EXCHANGE")
-				else if (phraseUpper.startsWith(keyword4Upper)) {
-					cue = phrase.slice(keyword4.length).trim()
-				}
-				// Keyword is in the middle or elsewhere, replace it (case-insensitive)
-				else if (phraseUpper.includes(keyword4Upper)) {
+				} else if (phraseUpper.includes(keyword4Upper)) {
 					const index = phraseUpper.indexOf(keyword4Upper)
 					cue = (phrase.slice(0, index) + phrase.slice(index + keyword4.length)).trim()
 				}
