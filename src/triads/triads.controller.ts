@@ -44,6 +44,11 @@ export class TriadsController {
 		return this.triadsService.getFourthTriadCues(getFourthTriadDto)
 	}
 
+	@Get('fourth-triad-solution')
+	getFourthTriadSolution(@Query() getFourthTriadDto: GetFourthTriadDto) {
+		return this.triadsService.getFourthTriadSolution(getFourthTriadDto)
+	}
+
 	@Get('groups/:id/triads')
 	async getTriadsByGroupId(@Param('id', ParseIntPipe) id: number) {
 		return this.triadsService.getTriadsByGroupId(id)

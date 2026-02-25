@@ -140,6 +140,30 @@ export class TriadsService {
 		return triadGroup?.Triad4?.cues
 	}
 
+	async getFourthTriadSolution(getFourthTriadDto: GetFourthTriadDto) {
+		const triadGroup = await this.prismaService.triadGroup.findFirst({
+			where: {
+				id: getFourthTriadDto.triadGroupId,
+			},
+			select: {
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		if (!triadGroup?.Triad4) {
+			throw new NotFoundException(`Fourth triad for group ${getFourthTriadDto.triadGroupId} not found`)
+		}
+
+		return triadGroup.Triad4
+	}
+
 	async getTriadsByGroupId(id: number) {
 		const triadGroup = await this.prismaService.triadGroup.findUnique({
 			where: { id },
@@ -168,6 +192,14 @@ export class TriadsService {
 						fullPhrases: true,
 					},
 				},
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
 			},
 		})
 
@@ -175,8 +207,7 @@ export class TriadsService {
 			throw new NotFoundException(`Triad group with ID ${id} not found`)
 		}
 
-		// Return triads 1-3 as an array (skipping the fourth triad)
-		return [triadGroup.Triad1, triadGroup.Triad2, triadGroup.Triad3]
+		return [triadGroup.Triad1, triadGroup.Triad2, triadGroup.Triad3, triadGroup.Triad4]
 	}
 
 	async getTriadGroups(offset: number, limit: number, search?: string) {
