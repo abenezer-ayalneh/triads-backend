@@ -46,6 +46,39 @@ model TriadGroup {
   Triad2 Triad @relation(fields: [triad2Id], references: [id], name: "secondTriad")
   Triad3 Triad @relation(fields: [triad3Id], references: [id], name: "thirdTriad")
   Triad4 Triad @relation(fields: [triad4Id], references: [id], name: "fourthTriad")
+  TriadDailySchedules TriadDailySchedule[]
 
   @@map("triadGroups")
+}
+
+enum DailyAttemptStatus {
+  IN_PROGRESS
+  WON
+  LOST
+}
+
+model TriadDailySchedule {
+  id           Int        @id @default(autoincrement())
+  puzzleDate   DateTime   @db.Date
+  triadGroupId Int
+  TriadGroup   TriadGroup @relation(fields: [triadGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([puzzleDate])
+  @@map("triad_daily_schedules")
+}
+
+model DailyTriadAttempt {
+  id             Int                @id @default(autoincrement())
+  anonymousId    String
+  puzzleDate     DateTime           @db.Date
+  triadGroupId   Int
+  status         DailyAttemptStatus
+  score          Int?
+  scrambledCues  String[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([anonymousId, puzzleDate])
+  @@index([puzzleDate])
+  @@map("daily_triad_attempts")
 }
