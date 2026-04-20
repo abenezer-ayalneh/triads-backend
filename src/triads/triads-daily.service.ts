@@ -167,21 +167,23 @@ export class TriadsDailyService {
 
 	async listSchedules(offset = 0, limit = 50) {
 		const take = Math.min(limit, 100)
-		const rows = await this.prismaService.triadDailySchedule.findMany({
-			orderBy: { puzzleDate: 'desc' },
-			skip: offset,
-			take,
-			select: {
-				id: true,
-				puzzleDate: true,
-				triadGroupId: true,
-			},
-		})
+		const rows = await this.prismaService.$queryRaw<Array<{ id: number; puzzleDate: Date; triadGroupId: number; challengeNumber: bigint }>>(Prisma.sql`
+			SELECT
+				s.id,
+				s."puzzleDate",
+				s."triadGroupId",
+				ROW_NUMBER() OVER (ORDER BY s."puzzleDate" ASC, s.id ASC) AS "challengeNumber"
+			FROM "triad_daily_schedules" s
+			ORDER BY s."puzzleDate" DESC, s.id DESC
+			OFFSET ${offset}
+			LIMIT ${take}
+		`)
 
 		return rows.map((r) => ({
 			id: r.id,
 			puzzleDate: this.formatDbDateAsYmd(r.puzzleDate),
 			triadGroupId: r.triadGroupId,
+			challengeNumber: Number(r.challengeNumber),
 		}))
 	}
 
@@ -199,7 +201,9 @@ export class TriadsDailyService {
 			const created = await this.prismaService.triadDailySchedule.create({
 				data: {
 					puzzleDate,
-					triadGroupId,
+					TriadGroup: {
+						connect: { id: triadGroupId },
+					},
 				},
 				select: {
 					id: true,
@@ -207,10 +211,12 @@ export class TriadsDailyService {
 					triadGroupId: true,
 				},
 			})
+			const challengeNumber = await this.computeChallengeNumberForDate(created.puzzleDate)
 			return {
 				id: created.id,
 				puzzleDate: this.formatDbDateAsYmd(created.puzzleDate),
 				triadGroupId: created.triadGroupId,
+				challengeNumber,
 			}
 		} catch (e) {
 			if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -220,7 +226,18 @@ export class TriadsDailyService {
 		}
 	}
 
-	/** Eastern-calendar “today” puzzle metadata for the landing page (challenge # = 100 + triadGroupId). */
+	private async computeChallengeNumberForDate(puzzleDate: Date): Promise<number> {
+		const rank = await this.prismaService.triadDailySchedule.count({
+			where: {
+				puzzleDate: {
+					lte: puzzleDate,
+				},
+			},
+		})
+		return rank
+	}
+
+	/** Eastern-calendar “today” puzzle metadata for the landing page (challenge # = 100 + date-ordered schedule rank). */
 	async getTodayPublicInfo(anonymousId?: string) {
 		const puzzleDateStr = getEasternYmd()
 		const puzzleDate = easternYmdToDbDate(puzzleDateStr)
@@ -234,10 +251,13 @@ export class TriadsDailyService {
 			return { scheduled: false as const, puzzleDate: puzzleDateStr }
 		}
 
+		const challengeNumber = await this.computeChallengeNumberForDate(puzzleDate)
+
 		const base = {
 			scheduled: true as const,
 			puzzleDate: puzzleDateStr,
 			triadGroupId: schedule.triadGroupId,
+			challengeNumber,
 		}
 
 		if (!anonymousId || !ANONYMOUS_ID_PATTERN.test(anonymousId)) {
@@ -267,6 +287,9 @@ export class TriadsDailyService {
 			return { success: true as const }
 		} catch (e) {
 			if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+				throw new NotFoundException(`Schedule ${id} not found.`)
+			}
+			if (typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === 'P2025') {
 				throw new NotFoundException(`Schedule ${id} not found.`)
 			}
 			throw e
