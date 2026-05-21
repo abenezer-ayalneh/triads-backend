@@ -71,7 +71,7 @@ export class IsFourthTriadCuesValidConstraint implements ValidatorConstraintInte
 			})
 			.sort()
 
-		return expectedCues.every((keyword, index) => keyword === actualCues[index])
+		return expectedCues.every((expectedCue) => actualCues.some((actualCue) => actualCue.includes(expectedCue)))
 	}
 
 	defaultMessage(): string {
