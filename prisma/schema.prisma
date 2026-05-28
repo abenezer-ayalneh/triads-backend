@@ -82,3 +82,13 @@ model DailyTriadAttempt {
   @@index([puzzleDate])
   @@map("daily_triad_attempts")
 }
+
+model DailyClassicExtraUsage {
+  id           Int      @id @default(autoincrement())
+  anonymousId  String
+  puzzleDate   DateTime @db.Date
+  gamesStarted Int      @default(0)
+
+  @@unique([anonymousId, puzzleDate])
+  @@map("daily_classic_extra_usage")
+}

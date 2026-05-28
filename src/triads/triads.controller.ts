@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Put, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Patch, Post, Put, Query } from '@nestjs/common'
 
 import { CheckAnswerDto } from './dto/check-answer.dto'
 import { CheckSolutionDto } from './dto/check-solution.dto'
@@ -16,8 +16,8 @@ export class TriadsController {
 	constructor(private readonly triadsService: TriadsService) {}
 
 	@Get('cues')
-	getCues(@Query() getCuesDto: GetCuesDto) {
-		return this.triadsService.getCues(getCuesDto)
+	getCues(@Query() getCuesDto: GetCuesDto, @Headers('x-anonymous-id') anonymousId: string | undefined) {
+		return this.triadsService.getCues(getCuesDto, anonymousId)
 	}
 
 	@Get('hint')

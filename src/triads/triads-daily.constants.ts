@@ -1,0 +1,1 @@
+export const DAILY_CLASSIC_EXTRA_LIMIT = 3

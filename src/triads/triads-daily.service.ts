@@ -1,7 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { DailyAttemptStatus, Prisma } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { buildClassicExtraUsageInfo, ClassicExtraUsageInfo } from './triads-daily.types'
 import { easternYmdToDbDate, getEasternYmd, getNextEasternMidnightIso } from './triads-daily-timezone'
 
 const ANONYMOUS_ID_PATTERN = /^[a-zA-Z0-9-]{8,128}$/
@@ -248,7 +249,12 @@ export class TriadsDailyService {
 		})
 
 		if (!schedule) {
-			return { scheduled: false as const, puzzleDate: puzzleDateStr }
+			const base = { scheduled: false as const, puzzleDate: puzzleDateStr }
+			if (!anonymousId || !ANONYMOUS_ID_PATTERN.test(anonymousId)) {
+				return base
+			}
+			const classicExtra = await this.getClassicExtraUsage(anonymousId)
+			return { ...base, ...classicExtra }
 		}
 
 		const challengeNumber = await this.computeChallengeNumberForDate(puzzleDate)
@@ -275,8 +281,9 @@ export class TriadsDailyService {
 		})
 
 		const hasCompletedDaily = attempt?.status === DailyAttemptStatus.WON || attempt?.status === DailyAttemptStatus.LOST
+		const classicExtra = await this.getClassicExtraUsage(anonymousId)
 
-		return { ...base, hasCompletedDaily }
+		return { ...base, hasCompletedDaily, ...classicExtra }
 	}
 
 	async deleteSchedule(id: number) {
@@ -301,5 +308,132 @@ export class TriadsDailyService {
 		const m = String(d.getUTCMonth() + 1).padStart(2, '0')
 		const day = String(d.getUTCDate()).padStart(2, '0')
 		return `${y}-${m}-${day}`
+	}
+
+	private async getDailyGateContext(anonymousId: string, puzzleDate: Date) {
+		const schedule = await this.prismaService.triadDailySchedule.findUnique({
+			where: { puzzleDate },
+			select: { triadGroupId: true },
+		})
+
+		const attempt = await this.prismaService.dailyTriadAttempt.findUnique({
+			where: {
+				anonymousId_puzzleDate: {
+					anonymousId,
+					puzzleDate,
+				},
+			},
+			select: { status: true },
+		})
+
+		const dailyScheduled = Boolean(schedule)
+		const hasCompletedDaily = attempt?.status === DailyAttemptStatus.WON || attempt?.status === DailyAttemptStatus.LOST
+
+		return { dailyScheduled, hasCompletedDaily }
+	}
+
+	async getClassicExtraUsage(anonymousId: string): Promise<ClassicExtraUsageInfo> {
+		this.validateAnonymousId(anonymousId)
+
+		const puzzleDate = easternYmdToDbDate(getEasternYmd())
+		const usage = await this.prismaService.dailyClassicExtraUsage.findUnique({
+			where: {
+				anonymousId_puzzleDate: {
+					anonymousId,
+					puzzleDate,
+				},
+			},
+			select: { gamesStarted: true },
+		})
+
+		const gate = await this.getDailyGateContext(anonymousId, puzzleDate)
+
+		return buildClassicExtraUsageInfo(usage?.gamesStarted ?? 0, gate.dailyScheduled, gate.hasCompletedDaily)
+	}
+
+	private classicBlockedMessage(blockedReason: ClassicExtraUsageInfo['classicBlockedReason']): string {
+		if (blockedReason === 'daily_required') {
+			return "Complete today's Daily to unlock Classic."
+		}
+		if (blockedReason === 'capacity_reached') {
+			return "You've reached today's limit. Come back tomorrow after the Daily."
+		}
+		return 'Classic is unavailable right now.'
+	}
+
+	async assertCanStartClassicExtra(anonymousId: string): Promise<ClassicExtraUsageInfo> {
+		const usage = await this.getClassicExtraUsage(anonymousId)
+		if (!usage.canPlayClassic) {
+			throw new ForbiddenException({
+				message: this.classicBlockedMessage(usage.classicBlockedReason),
+				...usage,
+			})
+		}
+		return usage
+	}
+
+	async incrementClassicExtraStart(anonymousId: string): Promise<ClassicExtraUsageInfo> {
+		this.validateAnonymousId(anonymousId)
+
+		const puzzleDate = easternYmdToDbDate(getEasternYmd())
+
+		return this.prismaService.$transaction(async (tx) => {
+			const usageRow = await tx.dailyClassicExtraUsage.findUnique({
+				where: {
+					anonymousId_puzzleDate: {
+						anonymousId,
+						puzzleDate,
+					},
+				},
+				select: { gamesStarted: true },
+			})
+
+			const schedule = await tx.triadDailySchedule.findUnique({
+				where: { puzzleDate },
+				select: { triadGroupId: true },
+			})
+
+			const attempt = await tx.dailyTriadAttempt.findUnique({
+				where: {
+					anonymousId_puzzleDate: {
+						anonymousId,
+						puzzleDate,
+					},
+				},
+				select: { status: true },
+			})
+
+			const dailyScheduled = Boolean(schedule)
+			const hasCompletedDaily = attempt?.status === DailyAttemptStatus.WON || attempt?.status === DailyAttemptStatus.LOST
+			const used = usageRow?.gamesStarted ?? 0
+			const usageInfo = buildClassicExtraUsageInfo(used, dailyScheduled, hasCompletedDaily)
+
+			if (!usageInfo.canPlayClassic) {
+				throw new ForbiddenException({
+					message: this.classicBlockedMessage(usageInfo.classicBlockedReason),
+					...usageInfo,
+				})
+			}
+
+			const updated = await tx.dailyClassicExtraUsage.upsert({
+				where: {
+					anonymousId_puzzleDate: {
+						anonymousId,
+						puzzleDate,
+					},
+				},
+				create: {
+					anonymousId,
+					puzzleDate,
+					gamesStarted: 1,
+				},
+				update: {
+					gamesStarted: { increment: 1 },
+				},
+				select: { gamesStarted: true },
+			})
+
+			return buildClassicExtraUsageInfo(updated.gamesStarted, dailyScheduled, hasCompletedDaily)
+		})
 	}
 }

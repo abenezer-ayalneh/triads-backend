@@ -9,12 +9,17 @@ import { GetFourthTriadDto } from './dto/get-fourth-triad.dto'
 import { GetHintDto } from './dto/get-hint.dto'
 import { TriadInputDto } from './dto/triad-input.dto'
 import { UpdateTriadGroupDto } from './dto/update-triad-group.dto'
+import { TriadsDailyService } from './triads-daily.service'
 
 @Injectable()
 export class TriadsService {
-	constructor(private readonly prismaService: PrismaService) {}
+	constructor(
+		private readonly prismaService: PrismaService,
+		private readonly triadsDailyService: TriadsDailyService,
+	) {}
 
-	async getCues(getCuesDto?: GetCuesDto) {
+	async getCues(getCuesDto: GetCuesDto | undefined, anonymousId: string | undefined) {
+		const classicExtra = await this.triadsDailyService.incrementClassicExtraStart(anonymousId ?? '')
 		// Determine if we should filter by difficulty
 		const difficulty = getCuesDto?.difficulty || DifficultyFilter.RANDOM
 		const shouldFilterByDifficulty = difficulty !== DifficultyFilter.RANDOM
@@ -64,6 +69,7 @@ export class TriadsService {
 				triadGroupId: null,
 				cues: null,
 				message: `No active triad groups found${difficultyMessage}`,
+				...classicExtra,
 			}
 		}
 
@@ -72,7 +78,11 @@ export class TriadsService {
 			throw new Error('Invalid triad group data')
 		}
 
-		return { triadGroupId: triadGroup.id, cues: [...triadGroup.triad1, ...triadGroup.triad2, ...triadGroup.triad3].sort(() => Math.random() - 0.5) }
+		return {
+			triadGroupId: triadGroup.id,
+			cues: [...triadGroup.triad1, ...triadGroup.triad2, ...triadGroup.triad3].sort(() => Math.random() - 0.5),
+			...classicExtra,
+		}
 	}
 
 	async getMatchedTriad(cues: string[]): Promise<{ id: number; keyword: string; cues: string[]; fullPhrases: string[] } | undefined> {
