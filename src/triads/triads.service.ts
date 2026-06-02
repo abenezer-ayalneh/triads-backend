@@ -221,26 +221,49 @@ export class TriadsService {
 	}
 
 	async getTriadGroups(offset: number, limit: number, search?: string) {
-		// Build where clause for search if provided
-		// Search matches any of the 4 triads' keywords (case-insensitive partial match)
-		// Note: This endpoint returns all groups including deactivated ones for frontend management
-		const whereClause: Prisma.TriadGroupWhereInput = {}
+		// Note: This endpoint returns all groups including deactivated ones for frontend management.
+		//
+		// Ordering (see docs/adr/0001-raw-sql-for-manage-triads-ordering.md): scheduled groups
+		// first, ordered by their earliest assigned puzzleDate (the "governing puzzle date"),
+		// then unscheduled groups by id. Prisma's orderBy cannot order by MIN of a related
+		// table's field while paginating, so the ordered+paginated page of group ids is computed
+		// with a raw query, then hydrated with a typed select below.
+		//
+		// Search matches any of the 4 triads' keywords (case-insensitive partial match).
+		const searchClause = search
+			? Prisma.sql`WHERE (
+					t1.keyword ILIKE ${`%${search}%`}
+					OR t2.keyword ILIKE ${`%${search}%`}
+					OR t3.keyword ILIKE ${`%${search}%`}
+					OR t4.keyword ILIKE ${`%${search}%`}
+				)`
+			: Prisma.empty
 
-		if (search) {
-			whereClause.OR = [
-				{ Triad1: { keyword: { contains: search, mode: 'insensitive' } } },
-				{ Triad2: { keyword: { contains: search, mode: 'insensitive' } } },
-				{ Triad3: { keyword: { contains: search, mode: 'insensitive' } } },
-				{ Triad4: { keyword: { contains: search, mode: 'insensitive' } } },
-			]
+		const orderedRows = await this.prismaService.$queryRaw<{ id: number }[]>`
+			SELECT g.id
+			FROM "triadGroups" g
+			JOIN "triads" t1 ON t1.id = g."triad1Id"
+			JOIN "triads" t2 ON t2.id = g."triad2Id"
+			JOIN "triads" t3 ON t3.id = g."triad3Id"
+			JOIN "triads" t4 ON t4.id = g."triad4Id"
+			LEFT JOIN (
+				SELECT "triadGroupId", MIN("puzzleDate") AS min_puzzle_date
+				FROM "triad_daily_schedules"
+				GROUP BY "triadGroupId"
+			) s ON s."triadGroupId" = g.id
+			${searchClause}
+			ORDER BY (s.min_puzzle_date IS NULL) ASC, s.min_puzzle_date ASC, g.id ASC
+			LIMIT ${limit} OFFSET ${offset}
+		`
+
+		const orderedIds = orderedRows.map((row) => Number(row.id))
+		if (orderedIds.length === 0) {
+			return []
 		}
 
-		// Optimized query using select to only fetch needed fields
-		// Single query with includes to avoid N+1 queries
+		// Hydrate the ordered page with a typed select to only fetch needed fields.
 		const triadGroups = await this.prismaService.triadGroup.findMany({
-			where: whereClause,
-			skip: offset,
-			take: limit,
+			where: { id: { in: orderedIds } },
 			select: {
 				id: true,
 				active: true,
@@ -280,16 +303,21 @@ export class TriadsService {
 			},
 		})
 
-		// Transform the response to match the expected format (triad1, triad2, triad3, triad4)
-		return triadGroups.map((group) => ({
-			id: group.id,
-			active: group.active,
-			difficulty: group.difficulty,
-			triad1: group.Triad1,
-			triad2: group.Triad2,
-			triad3: group.Triad3,
-			triad4: group.Triad4,
-		}))
+		// Reorder to match the raw query's ordering (findMany does not preserve the `in` order)
+		// and transform to the expected format (triad1, triad2, triad3, triad4).
+		const groupById = new Map(triadGroups.map((group) => [group.id, group]))
+		return orderedIds
+			.map((id) => groupById.get(id))
+			.filter((group): group is (typeof triadGroups)[number] => group !== undefined)
+			.map((group) => ({
+				id: group.id,
+				active: group.active,
+				difficulty: group.difficulty,
+				triad1: group.Triad1,
+				triad2: group.Triad2,
+				triad3: group.Triad3,
+				triad4: group.Triad4,
+			}))
 	}
 
 	async deleteTriadGroup(id: number) {
