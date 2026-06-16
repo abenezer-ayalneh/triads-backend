@@ -105,7 +105,7 @@ export class TriadsService {
 	}
 
 	checkAnswer(answer: string, triad: { id: number; keyword: string; cues: string[]; fullPhrases: string[] }) {
-		return triad.keyword.toUpperCase() === answer.toUpperCase() ? triad : false
+		return triad.keyword.trim().toUpperCase() === answer.trim().toUpperCase() ? triad : false
 	}
 
 	async getHint(getHintDto: GetHintDto) {
