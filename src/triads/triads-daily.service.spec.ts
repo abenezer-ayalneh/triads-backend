@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { DailyAttemptStatus } from '@prisma/client'
 
@@ -9,9 +9,11 @@ import { easternYmdToDbDate, getEasternYmd } from './triads-daily-timezone'
 
 type ScheduleRow = { id: number; puzzleDate: Date; triadGroupId: number }
 type AttemptRow = {
+	id?: number
 	anonymousId: string
 	puzzleDate: Date
 	status: DailyAttemptStatus
+	progress?: unknown
 }
 type ClassicUsageRow = {
 	anonymousId: string
@@ -102,7 +104,22 @@ function createPrismaMock(
 						a.anonymousId === where.anonymousId_puzzleDate.anonymousId &&
 						dateOnly(a.puzzleDate) === dateOnly(where.anonymousId_puzzleDate.puzzleDate),
 				)
-				return row ? { status: row.status } : null
+				if (!row) return null
+				if (row.id === undefined) {
+					row.id = attempts.indexOf(row) + 1
+				}
+				return { id: row.id, status: row.status, progress: row.progress ?? null }
+			}),
+			update: jest.fn(({ where, data }: { where: { id: number }; data: { progress?: unknown; status?: DailyAttemptStatus; score?: number } }) => {
+				const row = attempts.find((a) => a.id === where.id)
+				if (!row) return null
+				if (data.progress !== undefined) {
+					row.progress = data.progress
+				}
+				if (data.status !== undefined) {
+					row.status = data.status
+				}
+				return { id: row.id, status: row.status }
 			}),
 		},
 		dailyClassicExtraUsage: {
@@ -261,6 +278,38 @@ describe('TriadsDailyService (classic extra quota)', () => {
 		await expect(service.incrementClassicExtraStart(TEST_ANONYMOUS_ID)).rejects.toBeInstanceOf(ForbiddenException)
 	})
 
+	it('saves in-progress snapshot only while attempt is IN_PROGRESS', async () => {
+		const { prismaMock, attempts } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ id: 7, anonymousId: TEST_ANONYMOUS_ID, puzzleDate: todayDate, status: DailyAttemptStatus.IN_PROGRESS }],
+		})
+		const service = await buildService(prismaMock)
+
+		const result = await service.saveDailyProgress(TEST_ANONYMOUS_ID, { solvedTriads: ['a', 'b'] })
+		expect(result).toEqual({ ok: true, ignored: false })
+		expect(attempts[0].progress).toEqual({ solvedTriads: ['a', 'b'] })
+
+		attempts[0].status = DailyAttemptStatus.WON
+		const lateSave = await service.saveDailyProgress(TEST_ANONYMOUS_ID, { stale: true })
+		expect(lateSave).toEqual({ ok: true, ignored: true })
+		expect(attempts[0].progress).toEqual({ solvedTriads: ['a', 'b'] })
+	})
+
+	it('rejects oversized progress payloads', async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ id: 1, anonymousId: TEST_ANONYMOUS_ID, puzzleDate: todayDate, status: DailyAttemptStatus.IN_PROGRESS }],
+		})
+		const service = await buildService(prismaMock)
+
+		const huge = { blob: 'x'.repeat(20 * 1024) }
+		await expect(service.saveDailyProgress(TEST_ANONYMOUS_ID, huge)).rejects.toBeInstanceOf(BadRequestException)
+	})
+
+	it('rejects progress save when no attempt exists', async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }])
+		const service = await buildService(prismaMock)
+		await expect(service.saveDailyProgress(TEST_ANONYMOUS_ID, { foo: 1 })).rejects.toBeInstanceOf(NotFoundException)
+	})
+
 	it('includes classic quota fields in getTodayPublicInfo', async () => {
 		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
 			attempts: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: todayDate, status: DailyAttemptStatus.LOST }],
@@ -277,6 +326,91 @@ describe('TriadsDailyService (classic extra quota)', () => {
 			classicExtrasLimit: DAILY_CLASSIC_EXTRA_LIMIT,
 			canPlayClassic: true,
 			classicBlockedReason: null,
+		})
+	})
+})
+
+// Trello KxOrLjJv: yesterday's attempt/bonus state must never influence today's response. The
+// home page and play guards key off this endpoint to decide between Welcome / in-progress Daily /
+// completed Daily / bonus games, so any leakage across the Eastern-midnight rollover would strand
+// a returning player on yesterday's screen.
+describe('TriadsDailyService (cross-day rollover isolation)', () => {
+	const buildService = async (prismaMock: PrismaService) => {
+		const module: TestingModule = await Test.createTestingModule({
+			providers: [TriadsDailyService, { provide: PrismaService, useValue: prismaMock }],
+		}).compile()
+		return module.get(TriadsDailyService)
+	}
+
+	const today = getEasternYmd()
+	const yesterday = addDaysYmd(today, -1)
+	const yesterdayDate = easternYmdToDbDate(yesterday)
+
+	it("reports today's Welcome state when yesterday's Daily was won with no bonus games", async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, status: DailyAttemptStatus.WON }],
+		})
+		const service = await buildService(prismaMock)
+
+		const info = await service.getTodayPublicInfo(TEST_ANONYMOUS_ID)
+		expect(info).toMatchObject({
+			scheduled: true,
+			hasCompletedDaily: false,
+			classicExtrasUsed: 0,
+			classicExtrasRemaining: DAILY_CLASSIC_EXTRA_LIMIT,
+			canPlayClassic: false,
+			classicBlockedReason: 'daily_required',
+		})
+	})
+
+	it("reports today's Welcome state when yesterday's Daily was won and one bonus game was played", async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, status: DailyAttemptStatus.WON }],
+			classicUsage: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, gamesStarted: 1 }],
+		})
+		const service = await buildService(prismaMock)
+
+		const info = await service.getTodayPublicInfo(TEST_ANONYMOUS_ID)
+		expect(info).toMatchObject({
+			scheduled: true,
+			hasCompletedDaily: false,
+			classicExtrasUsed: 0,
+			classicExtrasRemaining: DAILY_CLASSIC_EXTRA_LIMIT,
+			canPlayClassic: false,
+			classicBlockedReason: 'daily_required',
+		})
+	})
+
+	it("reports today's Welcome state when yesterday's Daily was left in progress", async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, status: DailyAttemptStatus.IN_PROGRESS }],
+		})
+		const service = await buildService(prismaMock)
+
+		const info = await service.getTodayPublicInfo(TEST_ANONYMOUS_ID)
+		expect(info).toMatchObject({
+			scheduled: true,
+			hasCompletedDaily: false,
+			classicExtrasUsed: 0,
+			classicExtrasRemaining: DAILY_CLASSIC_EXTRA_LIMIT,
+			canPlayClassic: false,
+			classicBlockedReason: 'daily_required',
+		})
+	})
+
+	it('keeps Classic blocked by daily_required when yesterday had max bonus usage', async () => {
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 10 }], {
+			attempts: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, status: DailyAttemptStatus.WON }],
+			classicUsage: [{ anonymousId: TEST_ANONYMOUS_ID, puzzleDate: yesterdayDate, gamesStarted: DAILY_CLASSIC_EXTRA_LIMIT }],
+		})
+		const service = await buildService(prismaMock)
+
+		const usage = await service.getClassicExtraUsage(TEST_ANONYMOUS_ID)
+		expect(usage).toMatchObject({
+			classicExtrasUsed: 0,
+			classicExtrasRemaining: DAILY_CLASSIC_EXTRA_LIMIT,
+			canPlayClassic: false,
+			classicBlockedReason: 'daily_required',
 		})
 	})
 })

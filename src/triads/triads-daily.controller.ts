@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Post, Query } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common'
 
 import { CreateDailyScheduleDto } from './dto/create-daily-schedule.dto'
 import { DailyCompleteDto } from './dto/daily-complete.dto'
+import { DailyProgressDto } from './dto/daily-progress.dto'
 import { GetDailySchedulesDto } from './dto/get-daily-schedules.dto'
 import { TriadsDailyService } from './triads-daily.service'
 
@@ -22,6 +23,11 @@ export class TriadsDailyController {
 	@Post('complete')
 	completeDaily(@Headers('x-anonymous-id') anonymousId: string | undefined, @Body() body: DailyCompleteDto) {
 		return this.triadsDailyService.completeDaily(anonymousId ?? '', body.outcome, body.score)
+	}
+
+	@Put('progress')
+	saveDailyProgress(@Headers('x-anonymous-id') anonymousId: string | undefined, @Body() body: DailyProgressDto) {
+		return this.triadsDailyService.saveDailyProgress(anonymousId ?? '', body.progress)
 	}
 
 	@Get('schedule')

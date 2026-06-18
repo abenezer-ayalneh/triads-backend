@@ -75,6 +75,7 @@ model DailyTriadAttempt {
   status         DailyAttemptStatus
   score          Int?
   scrambledCues  String[]
+  progress       Json?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 

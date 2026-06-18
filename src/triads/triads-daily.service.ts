@@ -6,6 +6,7 @@ import { buildClassicExtraUsageInfo, ClassicExtraUsageInfo } from './triads-dail
 import { easternYmdToDbDate, getEasternYmd, getNextEasternMidnightIso } from './triads-daily-timezone'
 
 const ANONYMOUS_ID_PATTERN = /^[a-zA-Z0-9-]{8,128}$/
+const MAX_PROGRESS_BYTES = 16 * 1024
 
 @Injectable()
 export class TriadsDailyService {
@@ -91,6 +92,7 @@ export class TriadsDailyService {
 				attemptStatus: DailyAttemptStatus.IN_PROGRESS,
 				triadGroupId,
 				cues: attempt.scrambledCues,
+				progress: attempt.progress ?? null,
 				puzzleDate: puzzleDateStr,
 				nextPuzzleAt,
 			}
@@ -121,9 +123,52 @@ export class TriadsDailyService {
 			attemptStatus: DailyAttemptStatus.IN_PROGRESS,
 			triadGroupId,
 			cues,
+			progress: null,
 			puzzleDate: puzzleDateStr,
 			nextPuzzleAt,
 		}
+	}
+
+	async saveDailyProgress(anonymousId: string, progress: unknown) {
+		this.validateAnonymousId(anonymousId)
+
+		if (progress === null || typeof progress !== 'object') {
+			throw new BadRequestException('Progress payload must be a JSON object.')
+		}
+
+		const serialized = JSON.stringify(progress)
+		if (serialized.length > MAX_PROGRESS_BYTES) {
+			throw new BadRequestException('Progress payload is too large.')
+		}
+
+		const puzzleDateStr = getEasternYmd()
+		const puzzleDate = easternYmdToDbDate(puzzleDateStr)
+
+		const attempt = await this.prismaService.dailyTriadAttempt.findUnique({
+			where: {
+				anonymousId_puzzleDate: {
+					anonymousId,
+					puzzleDate,
+				},
+			},
+			select: { id: true, status: true },
+		})
+
+		if (!attempt) {
+			throw new NotFoundException('No daily game in progress for this player.')
+		}
+
+		// Silently ignore late saves for finished attempts so a stale client retry can't reopen a game.
+		if (attempt.status !== DailyAttemptStatus.IN_PROGRESS) {
+			return { ok: true as const, ignored: true as const }
+		}
+
+		await this.prismaService.dailyTriadAttempt.update({
+			where: { id: attempt.id },
+			data: { progress: progress as Prisma.InputJsonValue },
+		})
+
+		return { ok: true as const, ignored: false as const }
 	}
 
 	async completeDaily(anonymousId: string, outcome: 'won' | 'lost', score: number) {
@@ -156,6 +201,7 @@ export class TriadsDailyService {
 			data: {
 				status: nextStatus,
 				score,
+				progress: Prisma.JsonNull,
 			},
 		})
 

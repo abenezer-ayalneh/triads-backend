@@ -33,4 +33,24 @@ describe('TriadsService', () => {
 	it('should be defined', () => {
 		expect(service).toBeDefined()
 	})
+
+	describe('checkAnswer', () => {
+		const triad = { id: 1, keyword: 'fish', cues: ['scales', 'fin', 'gill'], fullPhrases: [] }
+
+		it('accepts the exact correct answer', () => {
+			expect(service.checkAnswer('fish', triad)).toEqual(triad)
+		})
+
+		it('accepts an answer with a trailing space (iOS auto-complete bug)', () => {
+			expect(service.checkAnswer('fish ', triad)).toEqual(triad)
+		})
+
+		it('accepts an answer with leading whitespace', () => {
+			expect(service.checkAnswer(' fish', triad)).toEqual(triad)
+		})
+
+		it('rejects a different answer', () => {
+			expect(service.checkAnswer('cat', triad)).toBe(false)
+		})
+	})
 })
