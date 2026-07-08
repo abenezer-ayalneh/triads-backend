@@ -320,6 +320,29 @@ export class TriadsService {
 			}))
 	}
 
+	async getTriadGroupStats() {
+		const groupedCounts = await this.prismaService.triadGroup.groupBy({
+			by: ['difficulty'],
+			where: { active: true },
+			_count: { _all: true },
+		})
+
+		const byDifficulty = {
+			EASY: 0,
+			MEDIUM: 0,
+			HARD: 0,
+		}
+
+		for (const row of groupedCounts) {
+			byDifficulty[row.difficulty] = row._count._all
+		}
+
+		return {
+			totalActive: byDifficulty.EASY + byDifficulty.MEDIUM + byDifficulty.HARD,
+			byDifficulty,
+		}
+	}
+
 	async deleteTriadGroup(id: number) {
 		// Find the triad group
 		const triadGroup = await this.prismaService.triadGroup.findUnique({
