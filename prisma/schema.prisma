@@ -46,7 +46,7 @@ model TriadGroup {
   Triad2 Triad @relation(fields: [triad2Id], references: [id], name: "secondTriad")
   Triad3 Triad @relation(fields: [triad3Id], references: [id], name: "thirdTriad")
   Triad4 Triad @relation(fields: [triad4Id], references: [id], name: "fourthTriad")
-  TriadDailySchedules TriadDailySchedule[]
+  TriadDailySchedule TriadDailySchedule?
 
   @@map("triadGroups")
 }
@@ -64,6 +64,7 @@ model TriadDailySchedule {
   TriadGroup   TriadGroup @relation(fields: [triadGroupId], references: [id], onDelete: Cascade)
 
   @@unique([puzzleDate])
+  @@unique([triadGroupId])
   @@map("triad_daily_schedules")
 }
 

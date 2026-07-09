@@ -236,6 +236,7 @@ export class TriadsDailyService {
 
 	async createSchedule(puzzleDateYmd: string, triadGroupId: number) {
 		const puzzleDate = easternYmdToDbDate(puzzleDateYmd)
+		const today = easternYmdToDbDate(getEasternYmd())
 
 		const group = await this.prismaService.triadGroup.findFirst({
 			where: { id: triadGroupId, active: true },
@@ -245,24 +246,59 @@ export class TriadsDailyService {
 		}
 
 		try {
-			const created = await this.prismaService.triadDailySchedule.create({
-				data: {
-					puzzleDate,
-					TriadGroup: {
-						connect: { id: triadGroupId },
+			const schedule = await this.prismaService.$transaction(async (tx) => {
+				const dateSchedule = await tx.triadDailySchedule.findUnique({
+					where: { puzzleDate },
+					select: { id: true, puzzleDate: true, triadGroupId: true },
+				})
+				if (dateSchedule && dateSchedule.triadGroupId !== triadGroupId) {
+					throw new ConflictException(`A puzzle is already scheduled for ${puzzleDateYmd}.`)
+				}
+
+				const groupSchedule = await tx.triadDailySchedule.findFirst({
+					where: { triadGroupId },
+					select: { id: true, puzzleDate: true, triadGroupId: true },
+				})
+				if (groupSchedule) {
+					if (groupSchedule.puzzleDate.getTime() === puzzleDate.getTime()) {
+						return groupSchedule
+					}
+					if (groupSchedule.puzzleDate.getTime() <= today.getTime()) {
+						throw new ForbiddenException('Today and past daily schedules cannot be moved.')
+					}
+					if (puzzleDate.getTime() <= today.getTime()) {
+						throw new ForbiddenException('Daily schedules can only be moved to a future date.')
+					}
+					return tx.triadDailySchedule.update({
+						where: { id: groupSchedule.id },
+						data: { puzzleDate },
+						select: {
+							id: true,
+							puzzleDate: true,
+							triadGroupId: true,
+						},
+					})
+				}
+
+				return tx.triadDailySchedule.create({
+					data: {
+						puzzleDate,
+						TriadGroup: {
+							connect: { id: triadGroupId },
+						},
 					},
-				},
-				select: {
-					id: true,
-					puzzleDate: true,
-					triadGroupId: true,
-				},
+					select: {
+						id: true,
+						puzzleDate: true,
+						triadGroupId: true,
+					},
+				})
 			})
-			const challengeNumber = await this.computeChallengeNumberForDate(created.puzzleDate)
+			const challengeNumber = await this.computeChallengeNumberForDate(schedule.puzzleDate)
 			return {
-				id: created.id,
-				puzzleDate: this.formatDbDateAsYmd(created.puzzleDate),
-				triadGroupId: created.triadGroupId,
+				id: schedule.id,
+				puzzleDate: this.formatDbDateAsYmd(schedule.puzzleDate),
+				triadGroupId: schedule.triadGroupId,
 				challengeNumber,
 			}
 		} catch (e) {
@@ -334,6 +370,17 @@ export class TriadsDailyService {
 
 	async deleteSchedule(id: number) {
 		try {
+			const schedule = await this.prismaService.triadDailySchedule.findUnique({
+				where: { id },
+				select: { id: true, puzzleDate: true },
+			})
+			if (!schedule) {
+				throw new NotFoundException(`Schedule ${id} not found.`)
+			}
+			const today = easternYmdToDbDate(getEasternYmd())
+			if (schedule.puzzleDate.getTime() <= today.getTime()) {
+				throw new ForbiddenException('Today and past daily schedules cannot be removed.')
+			}
 			await this.prismaService.triadDailySchedule.delete({
 				where: { id },
 			})

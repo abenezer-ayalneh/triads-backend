@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { Test, TestingModule } from '@nestjs/testing'
 import { DailyAttemptStatus } from '@prisma/client'
 
@@ -64,7 +64,7 @@ function createPrismaMock(
 			findUnique: jest.fn(({ where }: { where: { puzzleDate?: Date; id?: number } }) => {
 				if (where.puzzleDate) {
 					const row = rows.find((r) => dateOnly(r.puzzleDate) === dateOnly(where.puzzleDate))
-					return row ? { triadGroupId: row.triadGroupId } : null
+					return row ? { id: row.id, puzzleDate: row.puzzleDate, triadGroupId: row.triadGroupId } : null
 				}
 				if (where.id !== undefined) {
 					const row = rows.find((r) => r.id === where.id)
@@ -75,16 +75,31 @@ function createPrismaMock(
 				}
 				return null
 			}),
+			findFirst: jest.fn(({ where }: { where: { triadGroupId: number } }) => {
+				const row = rows.find((r) => r.triadGroupId === where.triadGroupId)
+				return row ? { id: row.id, puzzleDate: row.puzzleDate, triadGroupId: row.triadGroupId } : null
+			}),
 			count: jest.fn(({ where }: { where: { puzzleDate: { lte: Date } } }) => {
 				const cutoff = where.puzzleDate.lte
 				return rows.filter((r) => r.puzzleDate.getTime() <= cutoff.getTime()).length
 			}),
-			create: jest.fn(({ data }: { data: { puzzleDate: Date; triadGroupId: number } }) => {
+			create: jest.fn(({ data }: { data: { puzzleDate: Date; triadGroupId?: number; TriadGroup?: { connect: { id: number } } } }) => {
 				const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1
-				const created = { id: nextId, puzzleDate: data.puzzleDate, triadGroupId: data.triadGroupId }
+				const created = { id: nextId, puzzleDate: data.puzzleDate, triadGroupId: data.triadGroupId ?? data.TriadGroup?.connect.id ?? 0 }
 				rows.push(created)
 				sortAsc()
 				return created
+			}),
+			update: jest.fn(({ where, data }: { where: { id: number }; data: { puzzleDate: Date } }) => {
+				const row = rows.find((r) => r.id === where.id)
+				if (!row) {
+					const error = new Error('not found') as Error & { code?: string }
+					error.code = 'P2025'
+					throw error
+				}
+				row.puzzleDate = data.puzzleDate
+				sortAsc()
+				return row
 			}),
 			delete: jest.fn(({ where }: { where: { id: number } }) => {
 				const idx = rows.findIndex((r) => r.id === where.id)
@@ -196,24 +211,79 @@ describe('TriadsDailyService (date-ordered challenge numbers)', () => {
 		}
 	})
 
-	it('delete and reinsert date yields restored sequence 20,21,22 => 1,2,3', async () => {
+	it('creates a schedule for an unscheduled active group', async () => {
+		const { prismaMock, rows } = createPrismaMock([])
+		const service = await buildService(prismaMock)
+		const futureYmd = addDaysYmd(getEasternYmd(), 3)
+
+		const created = await service.createSchedule(futureYmd, 1)
+
+		expect(created.puzzleDate).toBe(futureYmd)
+		expect(created.triadGroupId).toBe(1)
+		expect(rows).toHaveLength(1)
+	})
+
+	it('moves an existing future schedule to a free date', async () => {
+		const today = getEasternYmd()
+		const originalYmd = addDaysYmd(today, 3)
+		const targetYmd = addDaysYmd(today, 4)
+		const { prismaMock, rows } = createPrismaMock([{ id: 1, puzzleDateYmd: originalYmd, triadGroupId: 1 }])
+		const service = await buildService(prismaMock)
+
+		const moved = await service.createSchedule(targetYmd, 1)
+
+		expect(moved.id).toBe(1)
+		expect(moved.puzzleDate).toBe(targetYmd)
+		expect(rows).toHaveLength(1)
+		expect(dateOnly(rows[0].puzzleDate)).toBe(targetYmd)
+	})
+
+	it('rejects moving an existing today or past schedule', async () => {
+		const today = getEasternYmd()
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 1 }])
+		const service = await buildService(prismaMock)
+
+		await expect(service.createSchedule(addDaysYmd(today, 2), 1)).rejects.toBeInstanceOf(ForbiddenException)
+	})
+
+	it('rejects moving an existing future schedule to today or the past', async () => {
+		const today = getEasternYmd()
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: addDaysYmd(today, 2), triadGroupId: 1 }])
+		const service = await buildService(prismaMock)
+
+		await expect(service.createSchedule(today, 1)).rejects.toBeInstanceOf(ForbiddenException)
+	})
+
+	it('rejects scheduling onto a date assigned to another group', async () => {
+		const targetYmd = addDaysYmd(getEasternYmd(), 2)
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: targetYmd, triadGroupId: 2 }])
+		const service = await buildService(prismaMock)
+
+		await expect(service.createSchedule(targetYmd, 1)).rejects.toBeInstanceOf(ConflictException)
+	})
+
+	it('deletes future schedule rows and keeps date-ordered challenge numbers contiguous', async () => {
+		const today = getEasternYmd()
 		const { prismaMock, rows } = createPrismaMock([
-			{ id: 1, puzzleDateYmd: '2026-04-20', triadGroupId: 1 },
-			{ id: 2, puzzleDateYmd: '2026-04-21', triadGroupId: 1 },
-			{ id: 3, puzzleDateYmd: '2026-04-22', triadGroupId: 1 },
+			{ id: 1, puzzleDateYmd: addDaysYmd(today, 1), triadGroupId: 1 },
+			{ id: 2, puzzleDateYmd: addDaysYmd(today, 2), triadGroupId: 2 },
+			{ id: 3, puzzleDateYmd: addDaysYmd(today, 3), triadGroupId: 3 },
 		])
 		const service = await buildService(prismaMock)
 
 		await service.deleteSchedule(2)
 		const listAfterDelete = await service.listSchedules(0, 50)
 		const byDateDelete = [...listAfterDelete].sort((a, b) => a.puzzleDate.localeCompare(b.puzzleDate))
-		expect(byDateDelete.map((r) => `${r.puzzleDate}:${r.challengeNumber}`)).toEqual(['2026-04-20:1', '2026-04-22:2'])
+		expect(byDateDelete.map((r) => r.challengeNumber)).toEqual([1, 2])
+		expect(rows).toHaveLength(2)
+	})
 
-		await service.createSchedule('2026-04-21', 1)
-		const listAfterReinsert = await service.listSchedules(0, 50)
-		const byDateReinsert = [...listAfterReinsert].sort((a, b) => a.puzzleDate.localeCompare(b.puzzleDate))
-		expect(byDateReinsert.map((r) => `${r.puzzleDate}:${r.challengeNumber}`)).toEqual(['2026-04-20:1', '2026-04-21:2', '2026-04-22:3'])
-		expect(rows).toHaveLength(3)
+	it('rejects deleting today or past schedule rows', async () => {
+		const today = getEasternYmd()
+		const { prismaMock } = createPrismaMock([{ id: 1, puzzleDateYmd: today, triadGroupId: 1 }])
+		const service = await buildService(prismaMock)
+
+		await expect(service.deleteSchedule(1)).rejects.toBeInstanceOf(ForbiddenException)
 	})
 
 	it('throws NotFoundException for unknown schedule deletion', async () => {

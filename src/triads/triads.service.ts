@@ -224,10 +224,9 @@ export class TriadsService {
 		// Note: This endpoint returns all groups including deactivated ones for frontend management.
 		//
 		// Ordering (see docs/adr/0001-raw-sql-for-manage-triads-ordering.md): scheduled groups
-		// first, ordered by their earliest assigned puzzleDate (the "governing puzzle date"),
-		// then unscheduled groups by id. Prisma's orderBy cannot order by MIN of a related
-		// table's field while paginating, so the ordered+paginated page of group ids is computed
-		// with a raw query, then hydrated with a typed select below.
+		// first, ordered by their assigned puzzleDate, then unscheduled groups by difficulty from
+		// easy to hard and id. The ordered+paginated page of group ids is computed with a raw query,
+		// then hydrated with a typed select below.
 		//
 		// Search matches any of the 4 triads' keywords (case-insensitive partial match).
 		const searchClause = search
@@ -246,13 +245,18 @@ export class TriadsService {
 			JOIN "triads" t2 ON t2.id = g."triad2Id"
 			JOIN "triads" t3 ON t3.id = g."triad3Id"
 			JOIN "triads" t4 ON t4.id = g."triad4Id"
-			LEFT JOIN (
-				SELECT "triadGroupId", MIN("puzzleDate") AS min_puzzle_date
-				FROM "triad_daily_schedules"
-				GROUP BY "triadGroupId"
-			) s ON s."triadGroupId" = g.id
+			LEFT JOIN "triad_daily_schedules" s ON s."triadGroupId" = g.id
 			${searchClause}
-			ORDER BY (s.min_puzzle_date IS NULL) ASC, s.min_puzzle_date ASC, g.id ASC
+			ORDER BY
+				(s."puzzleDate" IS NULL) ASC,
+				s."puzzleDate" ASC,
+				CASE g.difficulty::text
+					WHEN 'EASY' THEN 0
+					WHEN 'MEDIUM' THEN 1
+					WHEN 'HARD' THEN 2
+					ELSE 3
+				END ASC,
+				g.id ASC
 			LIMIT ${limit} OFFSET ${offset}
 		`
 

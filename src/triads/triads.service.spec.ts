@@ -70,10 +70,10 @@ describe('TriadsService', () => {
 	})
 
 	describe('getTriadGroups', () => {
-		const group = (id: number, keyword: string) => ({
+		const group = (id: number, keyword: string, difficulty = 'EASY') => ({
 			id,
 			active: true,
-			difficulty: 'EASY',
+			difficulty,
 			Triad1: { id: id * 10 + 1, keyword, cues: [`${keyword} cue 1`], fullPhrases: [] },
 			Triad2: { id: id * 10 + 2, keyword: `${keyword} 2`, cues: [`${keyword} cue 2`], fullPhrases: [] },
 			Triad3: { id: id * 10 + 3, keyword: `${keyword} 3`, cues: [`${keyword} cue 3`], fullPhrases: [] },
@@ -99,7 +99,35 @@ describe('TriadsService', () => {
 			)
 		})
 
-		it('preserves governing-puzzle-date order when the raw query orders scheduled groups', async () => {
+		it('sorts unscheduled groups by difficulty from easy to hard in the raw query', async () => {
+			prismaService.$queryRaw.mockResolvedValue([])
+
+			await service.getTriadGroups(0, 20)
+
+			const firstCall = prismaService.$queryRaw.mock.calls[0] as [TemplateStringsArray]
+			const sql = firstCall[0].join('')
+			expect(sql).toContain('CASE g.difficulty::text')
+			expect(sql).toContain("WHEN 'EASY' THEN 0")
+			expect(sql).toContain("WHEN 'MEDIUM' THEN 1")
+			expect(sql).toContain("WHEN 'HARD' THEN 2")
+			expect(sql).toContain('g.id ASC')
+		})
+
+		it('preserves the raw-query easy-to-hard order when hydrating unscheduled groups', async () => {
+			const scheduled = group(2, 'scheduled', 'HARD')
+			const easy = group(8, 'easy', 'EASY')
+			const medium = group(3, 'medium', 'MEDIUM')
+			const hard = group(1, 'hard', 'HARD')
+
+			prismaService.$queryRaw.mockResolvedValue([{ id: 2 }, { id: 8 }, { id: 3 }, { id: 1 }])
+			prismaService.triadGroup.findMany.mockResolvedValue([hard, medium, scheduled, easy])
+
+			const result = await service.getTriadGroups(0, 20)
+
+			expect(result.map((g) => g.id)).toEqual([2, 8, 3, 1])
+		})
+
+		it('preserves assigned-puzzle-date order when the raw query orders scheduled groups', async () => {
 			const scheduledEarliest = group(7, 'early')
 			const scheduledLater = group(3, 'later')
 			const unscheduled = group(20, 'unscheduled')
