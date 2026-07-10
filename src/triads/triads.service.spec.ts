@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
+import { Difficulty } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
 import { TriadsService } from './triads.service'
@@ -151,6 +152,20 @@ describe('TriadsService', () => {
 
 			expect(result.map((g) => g.id)).toEqual([4, 12])
 			expect(prismaService.$queryRaw).toHaveBeenCalledTimes(1)
+		})
+
+		it('combines keyword search with difficulty filtering', async () => {
+			prismaService.$queryRaw.mockResolvedValue([])
+
+			await service.getTriadGroups(0, 20, 'apple', Difficulty.MEDIUM)
+
+			const queryRawCall = prismaService.$queryRaw.mock.calls[0] as unknown[]
+			const values = queryRawCall.slice(1) as Array<{ strings?: string[] }>
+			const whereClause = values.find((value) => value?.strings?.join('').includes('WHERE'))
+			const sql = whereClause?.strings?.join('') ?? ''
+			expect(sql).toContain('t1.keyword ILIKE')
+			expect(sql).toContain('g.difficulty =')
+			expect(sql).toContain('AND')
 		})
 	})
 

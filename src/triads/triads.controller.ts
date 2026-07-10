@@ -64,7 +64,7 @@ export class TriadsController {
 		const offset = getTriadGroupsDto.offset ?? 0
 		const limit = getTriadGroupsDto.limit ?? 20
 		const search = getTriadGroupsDto.search
-		return this.triadsService.getTriadGroups(offset, limit, search)
+		return this.triadsService.getTriadGroups(offset, limit, search, getTriadGroupsDto.difficulty)
 	}
 
 	@Delete('groups/:id')

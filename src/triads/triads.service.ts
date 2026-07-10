@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { Difficulty, Prisma } from '@prisma/client'
 import { isEmpty, xor } from 'lodash'
 
 import { PrismaService } from '../prisma/prisma.service'
@@ -220,7 +220,7 @@ export class TriadsService {
 		return [triadGroup.Triad1, triadGroup.Triad2, triadGroup.Triad3, triadGroup.Triad4]
 	}
 
-	async getTriadGroups(offset: number, limit: number, search?: string) {
+	async getTriadGroups(offset: number, limit: number, search?: string, difficulty?: Difficulty) {
 		// Note: This endpoint returns all groups including deactivated ones for frontend management.
 		//
 		// Ordering (see docs/adr/0001-raw-sql-for-manage-triads-ordering.md): scheduled groups
@@ -229,14 +229,19 @@ export class TriadsService {
 		// then hydrated with a typed select below.
 		//
 		// Search matches any of the 4 triads' keywords (case-insensitive partial match).
-		const searchClause = search
-			? Prisma.sql`WHERE (
+		const whereConditions: Prisma.Sql[] = []
+		if (search) {
+			whereConditions.push(Prisma.sql`(
 					t1.keyword ILIKE ${`%${search}%`}
 					OR t2.keyword ILIKE ${`%${search}%`}
 					OR t3.keyword ILIKE ${`%${search}%`}
 					OR t4.keyword ILIKE ${`%${search}%`}
-				)`
-			: Prisma.empty
+				)`)
+		}
+		if (difficulty) {
+			whereConditions.push(Prisma.sql`g.difficulty = ${difficulty}::"Difficulty"`)
+		}
+		const whereClause = whereConditions.length > 0 ? Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}` : Prisma.empty
 
 		const orderedRows = await this.prismaService.$queryRaw<{ id: number }[]>`
 			SELECT g.id
@@ -246,7 +251,7 @@ export class TriadsService {
 			JOIN "triads" t3 ON t3.id = g."triad3Id"
 			JOIN "triads" t4 ON t4.id = g."triad4Id"
 			LEFT JOIN "triad_daily_schedules" s ON s."triadGroupId" = g.id
-			${searchClause}
+			${whereClause}
 			ORDER BY
 				(s."puzzleDate" IS NULL) ASC,
 				s."puzzleDate" ASC,
