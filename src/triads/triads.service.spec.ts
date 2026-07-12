@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { Difficulty } from '@prisma/client'
 
 import { PrismaService } from '../prisma/prisma.service'
+import { DifficultyFilter } from './dto/get-cues.dto'
 import { TriadsService } from './triads.service'
 import { TriadsDailyService } from './triads-daily.service'
 
@@ -9,6 +10,7 @@ describe('TriadsService', () => {
 	let service: TriadsService
 	let prismaService: {
 		$queryRaw: jest.Mock
+		$queryRawUnsafe: jest.Mock
 		triadGroup: {
 			findMany: jest.Mock
 			groupBy: jest.Mock
@@ -18,6 +20,7 @@ describe('TriadsService', () => {
 	beforeEach(async () => {
 		prismaService = {
 			$queryRaw: jest.fn(),
+			$queryRawUnsafe: jest.fn(),
 			triadGroup: {
 				findMany: jest.fn(),
 				groupBy: jest.fn(),
@@ -48,6 +51,18 @@ describe('TriadsService', () => {
 
 	it('should be defined', () => {
 		expect(service).toBeDefined()
+	})
+
+	describe('getStandaloneClassicCues', () => {
+		it('selects active cues without touching Classic Extra usage', async () => {
+			prismaService.$queryRawUnsafe.mockResolvedValue([{ id: 7, triad1: ['A', 'B', 'C'], triad2: ['D', 'E', 'F'], triad3: ['G', 'H', 'I'] }])
+
+			const result = await service.getStandaloneClassicCues({ difficulty: DifficultyFilter.RANDOM })
+
+			expect(result.triadGroupId).toBe(7)
+			expect(result.cues).toHaveLength(9)
+			expect(prismaService.$queryRawUnsafe).toHaveBeenCalled()
+		})
 	})
 
 	describe('checkAnswer', () => {

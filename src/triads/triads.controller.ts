@@ -20,6 +20,11 @@ export class TriadsController {
 		return this.triadsService.getCues(getCuesDto, anonymousId)
 	}
 
+	@Get('standalone-classic/cues')
+	getStandaloneClassicCues(@Query() getCuesDto: GetCuesDto) {
+		return this.triadsService.getStandaloneClassicCues(getCuesDto)
+	}
+
 	@Get('hint')
 	getHint(@Query() getHintDto: GetHintDto) {
 		return this.triadsService.getHint(getHintDto)

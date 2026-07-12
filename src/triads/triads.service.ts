@@ -20,6 +20,17 @@ export class TriadsService {
 
 	async getCues(getCuesDto: GetCuesDto | undefined, anonymousId: string | undefined) {
 		const classicExtra = await this.triadsDailyService.incrementClassicExtraStart(anonymousId ?? '')
+		return {
+			...(await this.selectRandomCues(getCuesDto)),
+			...classicExtra,
+		}
+	}
+
+	async getStandaloneClassicCues(getCuesDto: GetCuesDto | undefined) {
+		return this.selectRandomCues(getCuesDto)
+	}
+
+	private async selectRandomCues(getCuesDto: GetCuesDto | undefined) {
 		// Determine if we should filter by difficulty
 		const difficulty = getCuesDto?.difficulty || DifficultyFilter.RANDOM
 		const shouldFilterByDifficulty = difficulty !== DifficultyFilter.RANDOM
@@ -69,7 +80,6 @@ export class TriadsService {
 				triadGroupId: null,
 				cues: null,
 				message: `No active triad groups found${difficultyMessage}`,
-				...classicExtra,
 			}
 		}
 
@@ -81,7 +91,6 @@ export class TriadsService {
 		return {
 			triadGroupId: triadGroup.id,
 			cues: [...triadGroup.triad1, ...triadGroup.triad2, ...triadGroup.triad3].sort(() => Math.random() - 0.5),
-			...classicExtra,
 		}
 	}
 

@@ -109,6 +109,8 @@ THROTTLER_TTL=60000
 THROTTLER_LIMIT=100
 ```
 
+For production, include both web origins, including `https://triads-classic.gametrix.org`, in `CORS_ALLOWED_ORIGINS`.
+
 ### 4. Start Database (Docker Compose)
 
 ```bash
@@ -150,6 +152,7 @@ All endpoints are prefixed with `/api`
 #### Triads Endpoints
 
 - `GET /api/triads/cues` - Get all cues
+- `GET /api/triads/standalone-classic/cues` - Get unlimited Classic cues without Daily quota accounting
 - `GET /api/triads/hint` - Get hint for a triad
 - `GET /api/triads/check-triad` - Check if cues match a triad
 - `GET /api/triads/check-answer` - Validate an answer
