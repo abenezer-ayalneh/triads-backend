@@ -229,6 +229,59 @@ export class TriadsService {
 		return [triadGroup.Triad1, triadGroup.Triad2, triadGroup.Triad3, triadGroup.Triad4]
 	}
 
+	async getPublicTriadGroups() {
+		const triadGroups = await this.prismaService.triadGroup.findMany({
+			where: { active: true },
+			select: {
+				id: true,
+				difficulty: true,
+				Triad1: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad2: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad3: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+				Triad4: {
+					select: {
+						id: true,
+						keyword: true,
+						cues: true,
+						fullPhrases: true,
+					},
+				},
+			},
+		})
+
+		return triadGroups.map((group) => ({
+			id: group.id,
+			difficulty: group.difficulty,
+			triads: [
+				{ position: 1, ...group.Triad1 },
+				{ position: 2, ...group.Triad2 },
+				{ position: 3, ...group.Triad3 },
+				{ position: 4, ...group.Triad4 },
+			],
+		}))
+	}
+
 	async getTriadGroups(offset: number, limit: number, search?: string, difficulty?: Difficulty) {
 		// Note: This endpoint returns all groups including deactivated ones for frontend management.
 		//

@@ -149,6 +149,38 @@ Once the server is running, access the interactive Swagger documentation at:
 
 All endpoints are prefixed with `/api`
 
+#### Public Triad Inventory Endpoint
+
+- `GET /api/public/triad-groups` - Get every active triad group with all four complete triads
+
+### Public Active Triad-Group Export
+
+AI and other server-side consumers can fetch the live public inventory without authentication or an API key:
+
+**https://triads-api.gametrix.org/api/public/triad-groups**
+
+The endpoint returns every currently active group without pagination or a guaranteed order. Each group includes its difficulty and four complete, position-labelled triads. Deactivating a group removes it from the next response.
+
+> **Warning:** This endpoint intentionally exposes every active triad's keyword, cues, and full phrases. That includes content which can solve current and future Daily puzzles.
+
+```json
+[
+	{
+		"id": 7,
+		"difficulty": "HARD",
+		"triads": [
+			{
+				"position": 1,
+				"id": 71,
+				"keyword": "APPLE",
+				"cues": ["PIE", "TREE", "JUICE"],
+				"fullPhrases": ["APPLE PIE", "APPLE TREE", "APPLE JUICE"]
+			}
+		]
+	}
+]
+```
+
 #### Triads Endpoints
 
 - `GET /api/triads/cues` - Get all cues
@@ -217,8 +249,8 @@ This application has been optimized for low-memory environments (2GB RAM VPS):
     - Connection pooling configured via `DATABASE_URL`
 
 2. **Query Limits**
-    - All `findMany` queries have limits to prevent loading excessive data
-    - Pagination implemented for list endpoints
+    - Game and management list queries use limits or pagination to prevent loading excessive data
+    - The public active triad-group export intentionally returns the full active inventory in one request
 
 3. **Logging**
     - Production logging level set to `info` instead of `silly`

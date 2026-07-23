@@ -85,6 +85,52 @@ describe('TriadsService', () => {
 		})
 	})
 
+	describe('getPublicTriadGroups', () => {
+		it('returns active groups with complete, positioned triads without pagination or sorting', async () => {
+			prismaService.triadGroup.findMany.mockResolvedValue([
+				{
+					id: 7,
+					difficulty: Difficulty.HARD,
+					Triad1: { id: 71, keyword: 'apple', cues: ['pie'], fullPhrases: ['apple pie'] },
+					Triad2: { id: 72, keyword: 'tree', cues: ['oak'], fullPhrases: ['oak tree'] },
+					Triad3: { id: 73, keyword: 'juice', cues: ['orange'], fullPhrases: ['orange juice'] },
+					Triad4: { id: 74, keyword: 'core', cues: ['fruit'], fullPhrases: ['apple core'] },
+				},
+			])
+
+			await expect(service.getPublicTriadGroups()).resolves.toEqual([
+				{
+					id: 7,
+					difficulty: Difficulty.HARD,
+					triads: [
+						{ position: 1, id: 71, keyword: 'apple', cues: ['pie'], fullPhrases: ['apple pie'] },
+						{ position: 2, id: 72, keyword: 'tree', cues: ['oak'], fullPhrases: ['oak tree'] },
+						{ position: 3, id: 73, keyword: 'juice', cues: ['orange'], fullPhrases: ['orange juice'] },
+						{ position: 4, id: 74, keyword: 'core', cues: ['fruit'], fullPhrases: ['apple core'] },
+					],
+				},
+			])
+
+			expect(prismaService.triadGroup.findMany).toHaveBeenCalledWith({
+				where: { active: true },
+				select: {
+					id: true,
+					difficulty: true,
+					Triad1: { select: { id: true, keyword: true, cues: true, fullPhrases: true } },
+					Triad2: { select: { id: true, keyword: true, cues: true, fullPhrases: true } },
+					Triad3: { select: { id: true, keyword: true, cues: true, fullPhrases: true } },
+					Triad4: { select: { id: true, keyword: true, cues: true, fullPhrases: true } },
+				},
+			})
+		})
+
+		it('returns an empty inventory when no groups are active', async () => {
+			prismaService.triadGroup.findMany.mockResolvedValue([])
+
+			await expect(service.getPublicTriadGroups()).resolves.toEqual([])
+		})
+	})
+
 	describe('getTriadGroups', () => {
 		const group = (id: number, keyword: string, difficulty = 'EASY') => ({
 			id,
